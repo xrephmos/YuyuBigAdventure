@@ -14,6 +14,8 @@ import {
   makeExit,
   makeForge,
   makePlate,
+  makeSeal,
+  makeCarpet,
   MATERIALS,
 } from "./models.js";
 import { countHearts } from "../logic/shapes.js";
@@ -72,6 +74,7 @@ export class BoardWorld {
     this.monsters = new Map();
     this.items = new Map();
     this.doors = new Map();
+    this.seals = new Map();
     this.particles = [];
     this.timer = new THREE.Timer();
     this.reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -372,6 +375,7 @@ export class BoardWorld {
     this.monsters.clear();
     this.items.clear();
     this.doors.clear();
+    this.seals.clear();
     // 直接完成而不是丢弃未结束的补间，避免等待它们的流程永远挂起。
     for (const tw of this.tweens) tw.resolve();
     this.tweens = [];
@@ -412,6 +416,19 @@ export class BoardWorld {
       door.userData.tile = [r, c];
       this.levelGroup.add(door);
       this.doors.set(k, door);
+    }
+    for (const [r, c] of board.level.carpet ?? []) {
+      const carpet = makeCarpet();
+      carpet.position.copy(tileCenter(r, c));
+      this.levelGroup.add(carpet);
+    }
+    for (const k of board.seals) {
+      const [r, c] = k.split(",").map(Number);
+      const seal = makeSeal();
+      seal.position.copy(tileCenter(r, c));
+      seal.userData.tile = [r, c];
+      this.levelGroup.add(seal);
+      this.seals.set(k, seal);
     }
     this.exit = makeExit();
     this.exit.position.copy(tileCenter(board.exit.r, board.exit.c));
@@ -701,6 +718,36 @@ export class BoardWorld {
       model.scale.setScalar(1 - t);
     });
     this.levelGroup.remove(model);
+  }
+
+  /** 墨印出现裂痕：叉号变红，石块矮下去一截。 */
+  async crackSeals(cells) {
+    const list = cells.map(([r, c]) => this.seals.get(key(r, c))).filter(Boolean);
+    for (const seal of list) for (const stroke of seal.userData.mark.children) stroke.material = MATERIALS.heart;
+    await this.tween(420, (t) => {
+      for (const seal of list) {
+        seal.userData.stone.scale.y = 1 - t * 0.35;
+        seal.userData.stone.position.y = 0.17 * (1 - t * 0.35);
+        seal.userData.mark.position.y = -t * 0.12;
+      }
+    });
+  }
+
+  /** 墨印破除：一块接一块沉入地面。 */
+  async openSeals(cells) {
+    const list = cells.map(([r, c]) => [key(r, c), this.seals.get(key(r, c))]).filter(([, s]) => s);
+    await Promise.all(
+      list.map(([k, seal], i) =>
+        new Promise((done) => setTimeout(done, i * 90)).then(() =>
+          this.tween(520, (t) => {
+            seal.position.y = SURFACE - t * 0.45;
+          }).then(() => {
+            this.levelGroup.remove(seal);
+            this.seals.delete(k);
+          }),
+        ),
+      ),
+    );
   }
 
   async openDoor(r, c) {

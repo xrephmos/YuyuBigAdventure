@@ -1196,3 +1196,21 @@ test("暗王二阶段：心阵第一次清空时不倒下，换成另一种形�
   assert.ok(final.events.some((e) => e.type === "won"));
   assert.equal(combat.phase, "won");
 });
+
+test("王座厅的墨印：挡住通往暗王的路；守卫倒下一座出现裂痕，两座都倒下才破除", () => {
+  const board = createBoard(level("checkmate"), { weapons: STARTING_WEAPONS });
+  const king = board.monsters.find((m) => m.def.id === "king");
+  const guards = board.monsters.filter((m) => m.guard);
+  assert.equal(guards.length, 2, "两座守卫");
+  assert.ok(board.seals.size > 0);
+  assert.equal(heroCanEnter(board, 2, 4).ok, false, "墨印挡路");
+  const won = { phase: "won", heroMatrix: board.hero.matrix, potions: 0, stats: { taken: 0 }, weapons: [], monsterMatrix: [[0]], step: 0 };
+  const first = resolveBattle(board, guards[0], won, false);
+  assert.ok(first.some((e) => e.type === "seal-crack"), "第一座倒下：裂痕");
+  assert.equal(heroCanEnter(board, 2, 4).ok, false, "仍然挡路");
+  const second = resolveBattle(board, guards[1], won, false);
+  assert.ok(second.some((e) => e.type === "seal-open"), "第二座倒下：破除");
+  assert.equal(board.seals.size, 0);
+  assert.equal(heroCanEnter(board, 2, 4).ok, true, "路打开了");
+  assert.ok(king.alive);
+});

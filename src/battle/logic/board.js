@@ -44,6 +44,7 @@ export function createBoard(
   const tiles = [];
   const items = new Map();
   const doors = new Set();
+  const seals = new Set();
   let start = null;
   let exit = null;
   level.map.forEach((line, r) => {
@@ -59,6 +60,7 @@ export function createBoard(
       if (ch === "H" && level.chest && !weapons.includes(level.chest))
         items.set(key(r, c), { type: "chest", r, c, weapon: level.chest });
       if (ch === "L") doors.add(key(r, c));
+      if (ch === "X") seals.add(key(r, c));
       if (ch === "U") items.set(key(r, c), { type: "forge", r, c, opened: usedForges.includes(key(r, c)) });
     });
     tiles.push(row);
@@ -81,6 +83,7 @@ export function createBoard(
       pathDir: 1,
       every: spec.every ?? 1,
       drop: spec.drop ?? null,
+      guard: Boolean(spec.guard),
       aggro: false,
       stun: 0,
       alive: true,
@@ -93,6 +96,7 @@ export function createBoard(
     tiles,
     items,
     doors,
+    seals,
     exit,
     exitOpen: level.goal !== "boss",
     hero: {
@@ -187,7 +191,7 @@ export function monsterCanStand(state, r, c) {
   if (!inside(state, r, c)) return false;
   if (state.tiles[r][c].prop) return false;
   const k = key(r, c);
-  if (state.doors.has(k) || state.items.has(k)) return false;
+  if (state.doors.has(k) || state.items.has(k) || state.seals.has(k)) return false;
   if (state.exit.r === r && state.exit.c === c) return false;
   return !monsterAt(state, r, c);
 }
@@ -200,6 +204,7 @@ export function heroCanEnter(state, r, c) {
   if (item && NEARBY_PICKUP.has(item.type)) return { ok: false, reason: "无法到达" };
   if (state.doors.has(key(r, c)) && state.hero.keys <= 0)
     return { ok: false, reason: "需要钥匙" };
+  if (state.seals.has(key(r, c))) return { ok: false, reason: "墨印尚未破除" };
   if (state.exit.r === r && state.exit.c === c && !state.exitOpen)
     return { ok: false, reason: "出口已被封印" };
   return { ok: true };
@@ -426,6 +431,15 @@ export function resolveBattle(state, monster, combat, heroFirst) {
     if (monster.def.boss) {
       state.exitOpen = true;
       events.push({ type: "exit-open" });
+    }
+    // 守卫倒下：墨印出现裂痕；守卫全部倒下，墨印破除。
+    if (monster.guard && state.seals.size) {
+      const cells = [...state.seals].map((k) => k.split(",").map(Number));
+      if (state.monsters.some((m) => m.guard && m.alive)) events.push({ type: "seal-crack", cells });
+      else {
+        state.seals.clear();
+        events.push({ type: "seal-open", cells });
+      }
     }
     if (heroFirst) {
       const from = { r: state.hero.r, c: state.hero.c };

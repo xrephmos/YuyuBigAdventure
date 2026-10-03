@@ -671,6 +671,31 @@ export function makeDoor() {
   return group;
 }
 
+/**
+ * 墨印：一块低矮的墨黑方石挡在路上，顶面一个白色叉号（和封住的出口同一个记号）。
+ * 守卫倒下时出现裂痕（叉号变红、石块矮下去一截），守卫全部倒下后沉入地面。
+ */
+export function makeSeal() {
+  const group = new THREE.Group();
+  const stone = box(0.86, 0.34, 0.86, MATERIALS.ink);
+  const mark = new THREE.Group();
+  for (const angle of [Math.PI / 4, -Math.PI / 4]) {
+    const stroke = box(0.82, 0.02, 0.07, MATERIALS.paper, 0.35);
+    stroke.rotation.y = angle;
+    mark.add(stroke);
+  }
+  group.add(stone, mark);
+  group.userData = { stone, mark };
+  return group;
+}
+
+/** 长毯：贴着棋盘的一块墨黑薄板，从起点铺向王座。 */
+export function makeCarpet() {
+  const carpet = box(0.96, 0.008, 0.96, MATERIALS.ink, 0.004);
+  carpet.castShadow = false;
+  return carpet;
+}
+
 /** 出口：开启时是 IKB 方板 + 直立方框；封印时是墨黑方板 + 叉号。 */
 export function makeExit() {
   const group = new THREE.Group();

@@ -5,6 +5,7 @@ import { getHeroName } from "./heroName.js";
  * key：稳定的章节标识，存档（星级、用过的铁砧）按它记录，插入新章节也不会错位。
  * slots：本章的武器槽数量（2 起步，最多 5，始终少于拥有的武器种类）。
  *   S 起点  E 出口  K 钥匙  L 铁栅门  P 红心药水  A 护甲片  H 宝箱（内含 chest 指定的武器）  U 武器强化格（铁砧）
+ *   X 墨印：挡路，本章的守卫（monsters 里 guard: true 的怪物）全部倒下后破除
  *   b 书堆  c 蜡烛  i 墨水瓶  d 骰子  t 茶杯  w 怀表  . 空地
  * 怪物 ai：static 原地驻守；patrol 沿 path 往返；chase 发现主角（sight 格内）后追击。
  * fog：开启战争迷雾，radius 为主角的视野半径（障碍会遮挡视线）。
@@ -389,30 +390,31 @@ export const LEVELS = [
     slots: 5,
     name: "暗王的棋局",
     english: "CHECKMATE",
-    story: "墨迹的源头位于棋盘尽头。暗王驻守出口，王后在旁护卫，出口被墨印封住。",
-    tip: "暗王「王权蓄势」之后将使出「王座崩落」。决战前有两座[铁砧]。",
+    story: "墨迹的源头位于棋盘尽头。暗王端坐王座，两座城堡守在大厅两侧，王座四周封着墨印。",
+    tip: "击败两侧的城堡，王座四周的墨印才会破除。决战前有两座[铁砧]。",
     goal: "boss",
-    fog: { radius: 2.5 },
     goalText: "击败暗王，解开[出口]的封印",
     hero: { rows: 7, cols: 7 },
     potions: 3,
     chest: null,
     par: 30,
+    // 王座厅：以 d/e 两列之间为轴左右对称，暗王坐在 e7，起点 e1 正对王座；不设迷雾，一进殿就能看到全景。
+    // X 墨印：守卫（guard）全部倒下才会破除。carpet：从起点铺到墨印前的墨黑长毯。
     map: [
-      "t . . E . . . c",
+      "c . b . E b . c",
+      ". . . X . X . .",
+      ". b . X X X b .",
       ". . . . . . . .",
-      ". b . . . . b .",
+      "b . c . . c . b",
       ". . . . . . . .",
-      "c . b . . b . w",
-      ". . . . . . . .",
-      "P . . . . . . U",
-      "U . . S . . . .",
+      "U . . . . . . U",
+      "P . . . S . . P",
     ],
+    carpet: [3, 4, 5, 6, 7].map((r) => [r, 4]),
     monsters: [
-      { type: "king", at: [1, 3], ai: "static" },
-      { type: "queen", at: [3, 3], ai: "chase", sight: 2 },
-      { type: "pawn", at: [5, 2], ai: "static", drop: "potion" },
-      { type: "pawn", at: [5, 5], ai: "static", drop: "potion" },
+      { type: "king", at: [1, 4], ai: "static" },
+      { type: "rook", at: [3, 1], ai: "static", guard: true, drop: "potion" },
+      { type: "rook", at: [3, 6], ai: "static", guard: true, drop: "potion" },
     ],
   },
 ];
