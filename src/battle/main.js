@@ -971,16 +971,6 @@ async function battle(monster, heroFirst) {
       sfx.play("win");
       toast("出口封印已解除", "gold");
     }
-    if (event.type === "seal-crack") {
-      sfx.play("crack");
-      toast("王座四周的墨印出现裂痕");
-      await world.crackSeals(event.cells);
-    }
-    if (event.type === "seal-open") {
-      sfx.play("toll");
-      toast("墨印破除，通往王座的路已经打开", "gold");
-      await world.openSeals(event.cells);
-    }
     if (event.type === "move") await world.moveHero(event.to);
     if (event.type === "pickup") await pickup(event.item);
   }

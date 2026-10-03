@@ -23,6 +23,7 @@ import {
   heroTransform,
   previewAttack,
   heroWait,
+  previewHeal,
   slotBlocked,
   ENERGY_START,
   ENERGY_MAX,
@@ -1167,13 +1168,15 @@ test("拖动换装：出战内调整顺序、闲置拖上去（有空槽插入�
   assert.deepEqual(hero.equippedSkills, ["stun"], "技能可以全部换下");
 });
 
-test("暗王二阶段：心阵第一次清空时不倒下，换成另一种形状的心阵补满，招式换一套；再清空才算胜利", () => {
+test("暗王二阶段：心阵第一次清空时不倒下，换成另一种形状的心阵补满，招式换一套（恢复更多、带死灭）；再清空才算胜利", () => {
   const king = MONSTERS.king;
   assert.ok(king.rebirth, "暗王有二阶段");
   assert.equal(shapeProblem(king.rebirth.matrixValues), null, "二阶段心阵也要连成一片");
   assert.ok(isMirrorSymmetric(king.rebirth.matrixValues), "二阶段心阵左右对称");
   assert.notDeepEqual(king.rebirth.matrixValues, heartsAt(king, 2), "二阶段换一种形状");
-  assert.ok(!king.rebirth.pattern.some((p) => p.kind === "heal"), "二阶段不再回血");
+  assert.ok(king.rebirth.pattern.some((p) => p.kind === "heal"), "二阶段会回血");
+  assert.ok(king.rebirth.pattern.some((p) => p.drain), "二阶段有吸取攻击");
+  assert.ok(king.rebirth.pattern.some((p) => p.doom), "二阶段有死灭攻击");
 
   // 只剩一颗心的暗王：短剑打掉它，进入二阶段。
   const combat = createCombat({
@@ -1197,20 +1200,53 @@ test("暗王二阶段：心阵第一次清空时不倒下，换成另一种形�
   assert.equal(combat.phase, "won");
 });
 
-test("王座厅的墨印：挡住通往暗王的路；守卫倒下一座出现裂痕，两座都倒下才破除", () => {
+
+test("怪物的死灭攻击：打空的格子本场战斗里药水和汲血都补不回来；吸取攻击打中几颗心就给怪物补几颗", () => {
+  const doomAttack = { kind: "attack", name: "墨潮", shape: parseShape(["##"]), doom: true };
+  const drainAttack = { kind: "attack", name: "噬心", shape: parseShape(["#"]), drain: true };
+  const def = { ...MONSTERS.pawn, aim: 1, pattern: [doomAttack, drainAttack] };
+  const combat = createCombat({
+    hero: { matrix: parseMatrix(["###", "###", "###"]), weapons: ["dagger"], potions: 2 },
+    monster: { def, matrix: withHoles(parseMatrix(["####", "####"]), [[1, 1]]) },
+    heroFirst: false,
+    rng: createRng(3),
+  });
+  const aim = combat.aim;
+  monsterTurn(combat);
+  assert.equal(combat.heroDoomed.length, 2, "两格被死灭");
+  const [[r, c]] = combat.heroDoomed;
+  assert.ok(previewHeal(combat, r, c).every((h) => !(h.r === r && h.c === c)), "药水补不到死灭格");
+  assert.ok(aim);
+  // 第二招吸取：怪物心阵上有空格，打中 1 颗心就补回 1 颗。
+  heroWait(combat);
+  const before = countHearts(combat.monsterMatrix).hearts;
+  const result = monsterTurn(combat);
+  assert.ok(result.events.some((e) => e.type === "heal" && e.side === "monster"), "吸取回血");
+  assert.equal(countHearts(combat.monsterMatrix).hearts, before + 1);
+});
+
+test("王座厅：殿门只有一个缺口，守门的城堡站在缺口里；不打倒它就走不到暗王身边", () => {
   const board = createBoard(level("checkmate"), { weapons: STARTING_WEAPONS });
   const king = board.monsters.find((m) => m.def.id === "king");
-  const guards = board.monsters.filter((m) => m.guard);
-  assert.equal(guards.length, 2, "两座守卫");
-  assert.ok(board.seals.size > 0);
-  assert.equal(heroCanEnter(board, 2, 4).ok, false, "墨印挡路");
-  const won = { phase: "won", heroMatrix: board.hero.matrix, potions: 0, stats: { taken: 0 }, weapons: [], monsterMatrix: [[0]], step: 0 };
-  const first = resolveBattle(board, guards[0], won, false);
-  assert.ok(first.some((e) => e.type === "seal-crack"), "第一座倒下：裂痕");
-  assert.equal(heroCanEnter(board, 2, 4).ok, false, "仍然挡路");
-  const second = resolveBattle(board, guards[1], won, false);
-  assert.ok(second.some((e) => e.type === "seal-open"), "第二座倒下：破除");
-  assert.equal(board.seals.size, 0);
-  assert.equal(heroCanEnter(board, 2, 4).ok, true, "路打开了");
-  assert.ok(king.alive);
+  const gate = board.monsters.find((m) => m.def.id === "rook" && m.ai === "static");
+  const reachable = (blocked) => {
+    const seen = new Set([`${board.hero.r},${board.hero.c}`]);
+    const queue = [[board.hero.r, board.hero.c]];
+    while (queue.length) {
+      const [r, c] = queue.shift();
+      for (const [dr, dc] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const k = `${r + dr},${c + dc}`;
+        if (seen.has(k) || blocked.has(k) || !heroCanEnter(board, r + dr, c + dc).ok) continue;
+        seen.add(k);
+        queue.push([r + dr, c + dc]);
+      }
+    }
+    return seen;
+  };
+  const besideKing = (seen) => [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dr, dc]) => seen.has(`${king.r + dr},${king.c + dc}`));
+  const monsters = new Set(board.monsters.map((m) => `${m.r},${m.c}`));
+  assert.equal(besideKing(reachable(monsters)), false, "守门的城堡挡住了唯一的缺口");
+  monsters.delete(`${gate.r},${gate.c}`);
+  assert.equal(besideKing(reachable(monsters)), true, "打倒它，路就通了");
+  assert.ok(!board.level.fog, "王座厅没有迷雾");
 });

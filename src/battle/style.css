@@ -1525,19 +1525,39 @@ body:not(.in-level) .hint-bar {
   border-top: 8px solid var(--accent);
 }
 
-/* 首领的标题卡：盖住整张战斗卡的墨黑幕布，正中一行大字。不挡点击之外的东西，播完就隐藏。 */
+/* 首领的标题：横贯整个屏幕的一条墨黑横幅，正中一行大字，像电影的标题字幕。播完就隐藏。 */
 .stage-card {
   position: absolute;
-  inset: 0;
-  z-index: 5;
+  left: 0;
+  right: 0;
+  top: 50%;
+  z-index: 60;
   display: grid;
   place-content: center;
   gap: var(--sp-3);
-  padding: var(--sp-6);
+  padding: var(--sp-7) var(--sp-5);
   text-align: center;
   color: var(--paper);
-  background: rgba(var(--ink-rgb), 0.9);
+  background: rgba(var(--ink-rgb), 0.92);
+  transform: translateY(-50%);
+  pointer-events: none;
   animation: stage-in 0.45s var(--ease-entry);
+}
+
+/* 过场：战斗卡隐去、底色变透明，只看得见棋盘上的暗王。 */
+.battle-modal .battle-card {
+  transition:
+    transform 0.4s var(--ease-entry),
+    opacity 0.5s var(--ease-prod);
+}
+
+.battle-modal.cinematic {
+  background: transparent;
+}
+
+.battle-modal.cinematic .battle-card {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .stage-card .t-meta {
@@ -1560,6 +1580,7 @@ body:not(.in-level) .hint-bar {
 @keyframes stage-in {
   from {
     opacity: 0;
+    clip-path: inset(48% 0);
   }
 }
 

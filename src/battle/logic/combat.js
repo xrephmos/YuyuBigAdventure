@@ -105,6 +105,8 @@ export function createCombat({
     parried: false,
     // 被死灭抹去的格子 [[r, c], ...]：心阵上已经没有这一格，界面在原位置画一个 ×。
     doomed: [],
+    // 主角心阵上被怪物的死灭攻击打中的格子 [[r, c], ...]：本场战斗里药水和汲血都补不回来，界面画一个 ×。
+    heroDoomed: [],
     step: monster.step ?? 0,
     round: 1,
     intent: null,
@@ -285,11 +287,17 @@ export function heroTransform(state, weaponId, kind) {
 }
 
 /** 汲血：按消除的红心数，从上到下、从左到右补回主角失去的红心。 */
+/** 主角心阵上这一格是否被死灭攻击打过（本场战斗不能恢复）。 */
+const heroDoomedAt = (state, r, c) => state.heroDoomed.some(([dr, dc]) => dr === r && dc === c);
+
+/** 去掉落在死灭格上的恢复。 */
+const healable = (state, changes) => changes.filter(({ r, c }) => !heroDoomedAt(state, r, c));
+
 function drainHeal(state, amount) {
   const changes = [];
   state.heroMatrix.forEach((row, r) =>
     row.forEach((v, c) => {
-      if (v === EMPTY && changes.length < amount) changes.push({ r, c, before: EMPTY, after: HEART });
+      if (v === EMPTY && changes.length < amount && !heroDoomedAt(state, r, c)) changes.push({ r, c, before: EMPTY, after: HEART });
     }),
   );
   state.heroMatrix = applyChanges(state.heroMatrix, changes);
@@ -297,7 +305,7 @@ function drainHeal(state, amount) {
 }
 
 export function previewHeal(state, r, c) {
-  return resolveHeal(state.heroMatrix, POTION.shape, r, c);
+  return healable(state, resolveHeal(state.heroMatrix, POTION.shape, r, c));
 }
 
 /**
@@ -475,8 +483,8 @@ export function heroHeal(state, r, c) {
   const lock = locked(state, "potion");
   if (lock) return lock;
   if (state.potions <= 0) return { ok: false, reason: "药水已用尽" };
-  const heals = resolveHeal(state.heroMatrix, POTION.shape, r, c);
-  if (!heals.length) return { ok: false, reason: "范围内没有需要恢复的红心" };
+  const heals = healable(state, resolveHeal(state.heroMatrix, POTION.shape, r, c));
+  if (!heals.length) return { ok: false, reason: "范围内没有可以恢复的红心" };
   state.heroMatrix = applyChanges(state.heroMatrix, heals);
   state.potions -= 1;
   state.bonus = false;
@@ -656,7 +664,21 @@ export function monsterTurn(state) {
           ? `${name}使用「${intent.name}」，消除了 ${hits.length} 颗红心。`
           : `${name}的「${intent.name}」没有命中。`,
       );
-      events.push({ type: "monster-attack", intent, hits, anchor: state.aim });
+      // 死灭：打空的格子本场战斗不能再恢复。
+      const doomed = intent.doom ? hits.filter((h) => h.after === EMPTY).map(({ r, c }) => [r, c]) : [];
+      if (doomed.length) {
+        state.heroDoomed = [...state.heroDoomed, ...doomed];
+        state.log.push(`被「${intent.name}」打中的 ${doomed.length} 格本场无法恢复。`);
+      }
+      events.push({ type: "monster-attack", intent, hits, anchor: state.aim, doomed });
+      // 吸取：打中几颗心，怪物就给自己补回几颗。
+      if (intent.drain && hits.length) {
+        const changes = monsterHeal(state, hits.length);
+        if (changes.length) {
+          state.log.push(`${name}吸取了 ${changes.length} 颗红心。`);
+          events.push({ type: "heal", side: "monster", changes });
+        }
+      }
     }
   } else if (intent.kind === "charge") {
     state.log.push(`${name}正在蓄力。`);

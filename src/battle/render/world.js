@@ -14,7 +14,6 @@ import {
   makeExit,
   makeForge,
   makePlate,
-  makeSeal,
   makeCarpet,
   MATERIALS,
 } from "./models.js";
@@ -74,7 +73,6 @@ export class BoardWorld {
     this.monsters = new Map();
     this.items = new Map();
     this.doors = new Map();
-    this.seals = new Map();
     this.particles = [];
     this.timer = new THREE.Timer();
     this.reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -362,6 +360,15 @@ export class BoardWorld {
     const stex = new THREE.CanvasTexture(spark);
     stex.colorSpace = THREE.SRGBColorSpace;
     this.sparkMaterial = new THREE.SpriteMaterial({ map: stex, depthWrite: false, toneMapped: false });
+    // 墨色碎块：首领倒下与重新站起时飞散 / 聚拢的墨黑小方块。
+    const ink = document.createElement("canvas");
+    ink.width = ink.height = 16;
+    const ictx = ink.getContext("2d");
+    ictx.fillStyle = "#141414";
+    ictx.fillRect(0, 0, 16, 16);
+    const itex = new THREE.CanvasTexture(ink);
+    itex.colorSpace = THREE.SRGBColorSpace;
+    this.inkMaterial = new THREE.SpriteMaterial({ map: itex, depthWrite: false, toneMapped: false });
   }
 
   // ——— 关卡构建 ———
@@ -375,7 +382,6 @@ export class BoardWorld {
     this.monsters.clear();
     this.items.clear();
     this.doors.clear();
-    this.seals.clear();
     // 直接完成而不是丢弃未结束的补间，避免等待它们的流程永远挂起。
     for (const tw of this.tweens) tw.resolve();
     this.tweens = [];
@@ -421,14 +427,6 @@ export class BoardWorld {
       const carpet = makeCarpet();
       carpet.position.copy(tileCenter(r, c));
       this.levelGroup.add(carpet);
-    }
-    for (const k of board.seals) {
-      const [r, c] = k.split(",").map(Number);
-      const seal = makeSeal();
-      seal.position.copy(tileCenter(r, c));
-      seal.userData.tile = [r, c];
-      this.levelGroup.add(seal);
-      this.seals.set(k, seal);
     }
     this.exit = makeExit();
     this.exit.position.copy(tileCenter(board.exit.r, board.exit.c));
@@ -641,6 +639,34 @@ export class BoardWorld {
     }
   }
 
+  /**
+   * 首领倒下：棋子朝一侧轰然倒地，溅起一片墨色碎块。
+   * 转的是整个棋子（group），不是身体：受击晃动只动身体，结束时会把身体的倾斜归零。
+   */
+  async toppleBoss(group) {
+    const start = group.rotation.z;
+    await this.tween(
+      620,
+      (t) => {
+        group.rotation.z = start + t * 1.42;
+      },
+      (t) => t * t * t,
+    );
+    this.burst(group.position.clone().setY(0.25), 26, this.inkMaterial, 1.3);
+    this.shake(group, 0.05);
+  }
+
+  /** 首领重新站起：慢慢立起来，停在微微倾斜的角度（王冠歪着），墨色碎块往上涌。 */
+  async raiseBoss(group, tilt = 0.2) {
+    const start = group.rotation.z;
+    const rising = setInterval(() => this.burst(group.position.clone().setY(0.1), 5, this.inkMaterial, 0.5), 220);
+    await this.tween(2100, (t) => {
+      group.rotation.z = start + (tilt - start) * t;
+    }, ease.out);
+    clearInterval(rising);
+    this.burst(group.position.clone().setY(1.2), 30, this.inkMaterial, 1.1);
+  }
+
   async defeatMonster(m) {
     const entry = this.monsters.get(m.uid);
     if (!entry) return;
@@ -718,36 +744,6 @@ export class BoardWorld {
       model.scale.setScalar(1 - t);
     });
     this.levelGroup.remove(model);
-  }
-
-  /** 墨印出现裂痕：叉号变红，石块矮下去一截。 */
-  async crackSeals(cells) {
-    const list = cells.map(([r, c]) => this.seals.get(key(r, c))).filter(Boolean);
-    for (const seal of list) for (const stroke of seal.userData.mark.children) stroke.material = MATERIALS.heart;
-    await this.tween(420, (t) => {
-      for (const seal of list) {
-        seal.userData.stone.scale.y = 1 - t * 0.35;
-        seal.userData.stone.position.y = 0.17 * (1 - t * 0.35);
-        seal.userData.mark.position.y = -t * 0.12;
-      }
-    });
-  }
-
-  /** 墨印破除：一块接一块沉入地面。 */
-  async openSeals(cells) {
-    const list = cells.map(([r, c]) => [key(r, c), this.seals.get(key(r, c))]).filter(([, s]) => s);
-    await Promise.all(
-      list.map(([k, seal], i) =>
-        new Promise((done) => setTimeout(done, i * 90)).then(() =>
-          this.tween(520, (t) => {
-            seal.position.y = SURFACE - t * 0.45;
-          }).then(() => {
-            this.levelGroup.remove(seal);
-            this.seals.delete(k);
-          }),
-        ),
-      ),
-    );
   }
 
   async openDoor(r, c) {

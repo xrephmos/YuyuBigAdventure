@@ -94,6 +94,7 @@ export function runBattle({ root, combat, monster, world, sfx, heroFirst, featur
   const def = combat.def;
   root.innerHTML = `
   <div class="battle-modal" role="dialog" aria-modal="true" aria-label="战斗">
+    <div class="stage-card" data-stage-card hidden></div>
     <div class="battle-card ${def.boss ? "boss" : ""}">
       <header class="battle-head">
         <div class="head-left">
@@ -143,7 +144,6 @@ export function runBattle({ root, combat, monster, world, sfx, heroFirst, featur
       <div class="battle-log" data-log aria-live="polite"></div>
       <div class="battle-toast" data-toast></div>
       <div class="battle-result" data-result hidden></div>
-      <div class="stage-card" data-stage-card hidden></div>
     </div>
   </div>`;
 
@@ -408,6 +408,7 @@ export function runBattle({ root, combat, monster, world, sfx, heroFirst, featur
     heroView.markAim(aimShape, combat.aim, parriedCell(combat));
     enemyView.markHeal(combat.phase === "hero" ? combat.healPlan : null);
     enemyView.markDoomed(combat.doomed);
+    heroView.markDoomed(combat.heroDoomed);
     const note = $("[data-aim-note]");
     if (combat.intent?.kind === "attack" && combat.aim) {
       const hits = previewAim();
@@ -702,13 +703,14 @@ export function runBattle({ root, combat, monster, world, sfx, heroFirst, featur
     card.hidden = true;
   }
 
-  /** 心阵从上到下一行行聚拢出来（开场和二阶段共用）。 */
-  async function assembleEnemy(matrix) {
+  /** 心阵一行行聚拢出来：开场从上往下，二阶段从下往上（像重新站起来）。 */
+  async function assembleEnemy(matrix, { fromBottom = false } = {}) {
     syncSize();
     enemyView.set(matrix.map((row) => row.map((v) => (v > EMPTY ? EMPTY : v))));
     enemyView.relayout();
     const cells = [];
     matrix.forEach((row, r) => row.forEach((v, c) => v > EMPTY && cells.push({ r, c, before: EMPTY, after: v })));
+    if (fromBottom) cells.sort((a, b) => b.r - a.r || a.c - b.c);
     await enemyView.animate(cells, "heal", matrix);
   }
 
@@ -722,20 +724,34 @@ export function runBattle({ root, combat, monster, world, sfx, heroFirst, featur
   }
 
   /**
-   * 二阶段转场：心阵清空后停一拍，钟声与低鸣，标题卡写出二阶段的名字，音乐换成第二段，
-   * 新形状的心阵从上到下重新聚拢；名牌下的小字也换成二阶段的名字。
+   * 二阶段转场：像电影里的一段过场。
+   *   1. 心阵清空，音乐淡出；战斗卡隐去，镜头里只剩棋盘上的暗王。
+   *   2. 暗王的棋子轰然倒地，墨色碎块溅开；一片死寂。
+   *   3. 心跳声一下比一下近，钟声与低鸣涌上来，暗王慢慢重新站起，王冠从此歪着；第二段音乐从无声开始由弱渐强。
+   *   4. 标题「王冠倾斜」，战斗卡回来，新形状的心阵从下往上重新聚拢。
    */
   async function playRebirth(event) {
-    await delay(550);
+    const king = monsterEntity();
+    await delay(450);
+    sfx.music.play(null, { fadeOut: 1.4 });
+    modal.classList.add("cinematic");
+    await delay(650);
+    sfx.play("topple");
+    if (king) await world.toppleBoss(king);
+    await delay(1100);
+    for (const [i, gap] of [900, 760, 620].entries()) {
+      sfx.play("heartbeat", i);
+      await delay(gap);
+    }
     sfx.play("rebirth");
-    sfx.music.play("boss2");
-    modal.classList.add("rebirth");
-    enemyView.shake(true);
-    const shown = stageCard("Phase II · 第二阶段", event.title, 1400);
-    await delay(900);
+    sfx.music.play("boss2", { fadeIn: 16 });
+    if (king) await world.raiseBoss(king);
+    await stageCard("Phase II · 第二阶段", event.title, 1500);
     $(".side.enemy .traits").textContent = event.title;
-    await assembleEnemy(combat.monsterMatrix);
-    await shown;
+    modal.classList.remove("cinematic");
+    modal.classList.add("rebirth");
+    await delay(380);
+    await assembleEnemy(combat.monsterMatrix, { fromBottom: true });
     modal.classList.remove("rebirth");
   }
 
@@ -865,6 +881,13 @@ export function runBattle({ root, combat, monster, world, sfx, heroFirst, featur
           modal.classList.add("hurt");
           setTimeout(() => modal.classList.remove("hurt"), 400);
           await heroView.animate(event.hits, "hit", combat.heroMatrix, { heavy });
+          if (event.doomed?.length) {
+            // 死灭：打空的格子画上 ×，本场战斗补不回来。
+            sfx.play("curse");
+            heroView.markDoomed(combat.heroDoomed);
+            floatText("hero", "死灭", "curse");
+            await delay(380);
+          }
         } else {
           floatText("hero", "未命中", "miss");
           await delay(400);

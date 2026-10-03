@@ -398,6 +398,17 @@ export class Sfx {
         [0, 6, 11].forEach((iv) => this.tone(midi(50 + iv), 0.7, { volume: 0.03, type: "square", filter: 1400, slide: -30 }));
         this.noise(0.3, { volume: 0.04, filter: 400 });
         break;
+      case "topple":
+        // 首领倒地：沉重的一声闷响，带一点石头的回声。
+        this.tone(62, 0.9, { type: "sine", volume: 0.16, slide: -26, attack: 0.004 });
+        this.noise(0.5, { volume: 0.07, filter: 320 });
+        this.metal(140, 1.2, { volume: 0.025 });
+        break;
+      case "heartbeat":
+        // 心跳：低沉的“咚、咚”两下。amount 越大越响。
+        this.tone(52, 0.2, { type: "sine", volume: 0.08 + amount * 0.03, slide: -10, attack: 0.006 });
+        this.tone(46, 0.18, { type: "sine", volume: 0.06 + amount * 0.025, slide: -8, attack: 0.006, delay: 0.17 });
+        break;
       case "toll":
         // 首领开场：一声低沉的大钟。
         this.bellToll(98, 4.5, 0.06);
@@ -643,9 +654,11 @@ export const TRACKS = {
       if (bar % 2 === 1 && (s === 0 || s === 8)) ins.horn(c[2] + (s === 8 ? 12 : 0), t, beat * 1.9, 0.014);
     },
   },
-  // 暗王战（第二段，王冠倾斜）：116 拍/分，Dm – B♭ – Gm – A7♭9，最后一小节的降九音把紧张推到顶，再落回开头。
-  // 底下是急促的：3 + 3 + 2 的切分重音（弦乐、定音鼓、合唱短喝）、四拍一下的太鼓、最后一小节的连击与上扬。
-  // 上面是庄严的：女声合唱每小节两个长音“啊——”，铜管以二分音符吹众赞歌式的和弦，每小节一声大钟。
+  // 暗王战（第二段，王冠倾斜）：暗王重新站起之后，曲子由弱渐强，一轮轮加厚。
+  //   第 1 轮：只有大钟、女声合唱的长音和弦乐长和弦，庄严肃穆；
+  //   第 2 轮：加进铜管众赞歌、定音鼓和低音弦乐的八分音符；
+  //   第 3 轮起：完整编制——十六分音符的切分重音、太鼓、军鼓、圆号与小号齐奏的旋律、最后一小节的冲刺。
+  // 116 拍/分，Dm – B♭ – Gm – A7♭9，最后一小节的降九音把紧张推到顶，再落回开头。
   boss2: {
     bpm: 116,
     reverb: 0.6,
@@ -664,28 +677,34 @@ export const TRACKS = {
       [79, null, 79, 82, 81, null, 79, null],
       [81, 82, 81, 79, 77, 76, 73, null],
     ],
-    step(ins, s, bar, t, beat, c) {
+    step(ins, s, bar, t, beat, c, loop = 2) {
       const root = c[0];
+      const full = loop >= 2;
       const hit = this.accents.has(s);
-      // 低音弦乐：每个十六分音符都拉，重音处跳上八度；每拍最后一个音用小二度往上顶。
+      // 庄严的一层（从第 1 轮就有）：大钟、女声长音、弦乐长和弦。
+      if (s === 0) {
+        ins.toll(root, t, loop === 0 ? 0.024 : 0.018, 3.5);
+        ins.section(c.slice(0, 3).map((n) => n + 12), t, beat * 3.9, 0.005);
+        if (full && bar === 0) ins.crash(t, 0.02);
+      }
+      if (s === 0 || s === 8) ins.soprano(this.choirLine[bar][s / 8], t, beat * 2.05, loop === 0 ? 0.012 : 0.01);
+      if (loop === 0) return;
+      // 第 2 轮起：铜管众赞歌、定音鼓、低音弦乐。
+      if (s === 0 || s === 8) ins.brass(c.slice(0, 3), t, beat * 1.9, 0.007);
+      if (!full) {
+        if (s % 2 === 0) ins.strings(root - 12 + (s % 4 === 2 ? 12 : 0), t, beat * 0.4, 0.02);
+        if (s === 0 || s === 8) ins.timpani(36 + (root % 12) + (s === 8 ? 7 : 0), t, 0.11);
+        if (bar === 3 && s >= 12) ins.timpani(45, t, 0.05 + (s - 12) * 0.015);
+        return;
+      }
+      // 第 3 轮起：完整编制。低音弦乐每个十六分音符都拉，重音处跳上八度，每拍最后一个音用小二度往上顶。
       const note = hit ? root : s % 4 === 3 ? root - 11 : root - 12;
       ins.strings(note, t, beat * 0.2, hit ? 0.03 : 0.016);
       if (s % 4 === 0) ins.taiko(t, s === 0 ? 0.16 : 0.11);
       if (hit) ins.timpani(36 + (root % 12) + (s === 8 ? 7 : 0), t, s === 0 ? 0.15 : 0.09);
       if (s === 4 || s === 12) ins.snare(t, 0.045);
-      if (s === 0) {
-        if (bar === 0) ins.crash(t, 0.02);
-        ins.toll(root, t, 0.018, 3.5);
-        ins.section(c.slice(0, 3).map((n) => n + 12), t, beat * 3.9, 0.005);
-      }
-      // 庄严的一层：女声长音与铜管众赞歌，各占半小节。
-      if (s === 0 || s === 8) {
-        ins.soprano(this.choirLine[bar][s / 8], t, beat * 2.05, 0.01);
-        ins.brass(c.slice(0, 3).map((n) => n), t, beat * 1.9, 0.007);
-      }
-      // 合唱短促的“哈！”：只在两个最重的重音上。
+      // 合唱短促的“哈！”与铜管和弦刺，跟着切分重音。
       if (s === 0 || s === 8) ins.choir([c[0] + 12, c[2] + 12], t, beat * 0.55, 0.008);
-      // 铜管和弦刺：跟着切分重音。
       if (s === 3 || s === 11) ins.brass(c.slice(0, 3).map((n) => n + 12), t, beat * 0.25, 0.01);
       const m = s % 2 === 0 ? this.melody[bar][s / 2] : null;
       if (m) {
@@ -718,9 +737,14 @@ class Music {
     });
   }
 
-  /** 切换到某首曲子；同一首不会重新开始。null 表示淡出停止。 */
-  play(name) {
+  /**
+   * 切换到某首曲子；同一首不会重新开始。null 表示淡出停止。
+   * fadeIn：用多少秒从无声慢慢推到正常音量（默认约 1 秒）；fadeOut：旧曲子用多少秒淡出。
+   */
+  play(name, { fadeIn = 0, fadeOut = 0 } = {}) {
     this.want = name;
+    this.fadeIn = fadeIn;
+    this.fadeOut = fadeOut;
     this.resume();
   }
 
@@ -730,14 +754,19 @@ class Music {
     if ((this.current?.name ?? null) === this.want) return;
     const old = this.current;
     if (old) {
-      old.gain.gain.setTargetAtTime(0, ctx.currentTime, 0.35);
-      setTimeout(() => old.gain.disconnect(), 2000);
+      const out = this.fadeOut || 1;
+      old.gain.gain.setTargetAtTime(0, ctx.currentTime, out / 3);
+      setTimeout(() => old.gain.disconnect(), out * 1000 + 1500);
     }
     this.current = null;
     if (!this.want || !TRACKS[this.want]) return this.stopTimer();
     const gain = ctx.createGain();
     gain.gain.setValueAtTime(0, ctx.currentTime);
-    gain.gain.setTargetAtTime(1, ctx.currentTime + 0.1, 0.5);
+    if (this.fadeIn) {
+      // 由弱渐强：从几乎无声线性推到正常音量。
+      gain.gain.setValueAtTime(0.0001, ctx.currentTime + 0.05);
+      gain.gain.linearRampToValueAtTime(1, ctx.currentTime + this.fadeIn);
+    } else gain.gain.setTargetAtTime(1, ctx.currentTime + 0.1, 0.5);
     gain.connect(this.sfx.musicBus);
     const track = TRACKS[this.want];
     // 送进大厅混响的量由曲子自己决定：肃穆的曲子混响多，轻快的曲子不加。
@@ -764,7 +793,9 @@ class Music {
     while (cur.next < ctx.currentTime + 0.15) {
       const bar = Math.floor(cur.step / 16) % 4;
       const s = cur.step % 16;
-      if (this.sfx.musicEnabled) cur.track.step(cur.ins, s, bar, cur.next, beat, cur.track.chords[bar]);
+      // loop：这首曲子已经完整循环了几轮，曲子可以据此一层层加乐器。
+      const loop = Math.floor(cur.step / 64);
+      if (this.sfx.musicEnabled) cur.track.step(cur.ins, s, bar, cur.next, beat, cur.track.chords[bar], loop);
       cur.step += 1;
       cur.next += stepLen;
     }
