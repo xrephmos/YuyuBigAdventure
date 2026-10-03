@@ -45,6 +45,17 @@
  * 被死灭抹去的格子：心阵上已经没有这一格，但在原位置画一个黑色的 ×（两道斜线），
  * 让玩家记得这里曾经有过心。
  */
+/* 主角心阵上被死灭打空的格子：去掉空框，画和怪物身上一样的 ×。 */
+.battle-card .cell.empty.doomed {
+  background: none;
+  box-shadow: none;
+}
+
+.battle-card .cell.empty.doomed .heart-svg {
+  display: none;
+}
+
+.battle-card .cell.empty.doomed::before,
 .battle-card .cell.void.doomed::before {
   content: "";
   width: 46%;

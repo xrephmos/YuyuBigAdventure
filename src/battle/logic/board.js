@@ -433,6 +433,11 @@ export function resolveBattle(state, monster, combat, heroFirst) {
       state.hero.c = monster.c;
       state.turn += 1;
       events.push({ type: "move", from, to: { r: monster.r, c: monster.c } });
+      // 首领守在出口上（终章）：打倒它、站上那一格就算抵达出口。
+      if (state.exitOpen && state.exit.r === monster.r && state.exit.c === monster.c) {
+        state.over = "won";
+        events.push({ type: "exit" });
+      }
     }
     updateVisibility(state);
   } else if (combat.phase === "fled") {

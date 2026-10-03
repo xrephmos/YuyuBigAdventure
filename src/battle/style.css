@@ -2096,24 +2096,9 @@ body:not(.in-level) .hint-bar {
   animation: armor-in 0.5s var(--d, 0ms);
 }
 
-/* 红心填进空框：叠在空框上面，按顺序错开弹出。 */
-.cell .fill-heart {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  animation: heal-in 0.45s var(--d, 0ms) var(--ease-entry) both;
-}
-
-/* 叠上去的红心和填完后的正式红心一样大：格子这时还是空框状态，不能沿用空框里缩小的尺寸。 */
-.cell.empty .fill-heart .heart-svg {
-  width: 78%;
-  height: 78%;
-}
-
-.cell.empty .fill-heart .heart-svg.armor {
-  width: 92%;
-  height: 92%;
+/* 红心填进空框：这一格刚画成红心时弹出一下。 */
+.cell.filling .heart-svg {
+  animation: heal-in 0.45s var(--ease-entry) both;
 }
 
 .shard {
@@ -5917,43 +5902,109 @@ body.dev-mode .dev-badge {
   }
 }
 
-/* 打断：心阵上划过几道玻璃般的裂纹。 */
-.glass-crack {
+/* 打断：反白一闪。 */
+.battle-modal.break-flash .battle-card {
+  filter: invert(1);
+}
+
+/* 打断：一道粗重的锯齿裂痕劈开心阵，墨黑描边、纸白芯。 */
+.fracture {
   position: absolute;
   inset: 0;
   z-index: 4;
   pointer-events: none;
-  animation: crack-fade 1.1s ease-out forwards;
+  animation: fracture-fade 1.25s ease-out forwards;
 }
 
-.glass-crack svg {
+.fracture svg {
   width: 100%;
   height: 100%;
+  overflow: visible;
 }
 
-.glass-crack path {
+.fracture path {
   fill: none;
-  stroke: var(--ink);
-  stroke-width: 0.9;
+  stroke-linejoin: miter;
   vector-effect: non-scaling-stroke;
-  stroke-dasharray: 160;
-  stroke-dashoffset: 160;
-  animation: crack-draw 0.22s ease-out forwards;
+  stroke-dasharray: 400;
+  stroke-dashoffset: 400;
+  animation: fracture-draw 0.12s ease-out forwards;
 }
 
-@keyframes crack-draw {
+.fracture .edge {
+  stroke: var(--ink);
+  stroke-width: 9px;
+}
+
+.fracture .core {
+  stroke: var(--paper);
+  stroke-width: 3px;
+}
+
+@keyframes fracture-draw {
   to {
     stroke-dashoffset: 0;
   }
 }
 
-@keyframes crack-fade {
+@keyframes fracture-fade {
   0%,
-  60% {
+  65% {
     opacity: 1;
   }
   100% {
     opacity: 0;
+  }
+}
+
+/* 裂痕两侧错开：心阵整体先被劈得一歪，再合拢。 */
+.matrix.splitting {
+  animation: split-jolt 0.55s var(--ease-entry);
+}
+
+/* 用独立的 translate / rotate 属性：心阵靠 transform 在外框里居中，不能覆盖它。 */
+@keyframes split-jolt {
+  0% {
+    translate: 0 0;
+    rotate: 0deg;
+  }
+  12% {
+    translate: -7px 5px;
+    rotate: -1.4deg;
+  }
+  30% {
+    translate: 5px -3px;
+    rotate: 0.8deg;
+  }
+  100% {
+    translate: 0 0;
+    rotate: 0deg;
+  }
+}
+
+/* 打断：怪物的「下一招」横条断开、往下掉一截，再回到原位。 */
+.intent.broken {
+  animation: intent-break 0.9s var(--ease-entry);
+}
+
+@keyframes intent-break {
+  0% {
+    transform: none;
+  }
+  15% {
+    transform: translateY(10px) rotate(-3deg);
+    clip-path: polygon(0 0, 46% 0, 52% 100%, 0 100%);
+    opacity: 0.85;
+  }
+  55% {
+    transform: translateY(14px) rotate(-4deg);
+    clip-path: polygon(0 0, 46% 0, 52% 100%, 0 100%);
+    opacity: 0.4;
+  }
+  100% {
+    transform: none;
+    clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%);
+    opacity: 1;
   }
 }
 
@@ -6010,8 +6061,10 @@ body.processional .dpad {
   .battle-modal.dread .matrix-hero .cell.aim,
   .ink-splat,
   .ink-splat b,
-  .glass-crack,
-  .glass-crack path,
+  .fracture,
+  .fracture path,
+  .matrix.splitting,
+  .intent.broken,
   .flying-heart {
     animation-duration: 0.01s;
   }

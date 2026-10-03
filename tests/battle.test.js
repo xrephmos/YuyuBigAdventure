@@ -1265,3 +1265,19 @@ test("王座厅：跨进殿门的那一步，殿内的城堡一定会扑上来",
   assert.equal(moved.kind, "moved");
   assert.equal(advanceMonsters(board).ambush, hall, "一进殿就被扑上来");
 });
+
+test("王座厅：暗王坐在最后一排正中、守在出口上；打倒它就站上出口，本章完成", () => {
+  const board = createBoard(level("checkmate"), { weapons: STARTING_WEAPONS });
+  const king = board.monsters.find((m) => m.def.id === "king");
+  assert.equal(king.r, 0, "最后一排");
+  assert.equal(king.c, (board.level.display.cols - 1) / 2, "显示出来的几列的正中");
+  assert.deepEqual([board.exit.r, board.exit.c], [king.r, king.c], "出口在暗王脚下");
+  // 不显示的列整列是墙，走不进去。
+  for (let r = 0; r < 8; r += 1) assert.equal(heroCanEnter(board, r, board.level.display.cols).ok, false);
+  board.hero.r = king.r + 1;
+  board.hero.c = king.c;
+  const won = { phase: "won", heroMatrix: board.hero.matrix, potions: 0, stats: { taken: 0 }, weapons: [], monsterMatrix: [[0]], step: 0 };
+  const events = resolveBattle(board, king, won, true);
+  assert.ok(events.some((e) => e.type === "exit"), "站上出口");
+  assert.equal(board.over, "won");
+});

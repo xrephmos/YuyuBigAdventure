@@ -289,30 +289,59 @@ export class MatrixView {
     await new Promise((done) => setTimeout(done, last + 520));
   }
 
-  /** 打断：心阵上划过几道玻璃般的裂纹，随后淡去。 */
-  glassCrack() {
+  /**
+   * 打断：一道粗重的锯齿裂痕劈开整块心阵（墨黑描边、纸白芯，像被劈开的石板），
+   * 裂痕两侧的心阵各自错开一下再合拢，裂痕随后淡去。
+   */
+  fracture() {
+    const host = this.box ?? this.el;
+    const bolt = "M-2 22 L18 30 L27 18 L41 41 L52 33 L61 57 L74 49 L83 72 L102 80";
     const crack = document.createElement("i");
-    crack.className = "glass-crack";
+    crack.className = "fracture";
     crack.innerHTML = `<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-      <path d="M50 48 L20 8 M50 48 L88 14 M50 48 L95 62 M50 48 L62 96 M50 48 L12 80 M50 48 L4 40 M35 28 L28 40 M70 30 L80 42 M74 56 L84 70 M40 70 L30 74"/></svg>`;
-    (this.box ?? this.el).appendChild(crack);
-    setTimeout(() => crack.remove(), 1100);
+      <path class="edge" d="${bolt} M41 41 L35 62 M61 57 L70 30"/>
+      <path class="core" d="${bolt} M41 41 L35 62 M61 57 L70 30"/></svg>`;
+    // 裂痕只盖住有心的那一块（不含四周的界外格）。
+    const slots = [...this.cells.values()].filter((cell) => cell.classList.contains("slot"));
+    if (slots.length) {
+      const base = host.getBoundingClientRect();
+      const rects = slots.map((cell) => cell.getBoundingClientRect());
+      const left = Math.min(...rects.map((b) => b.left)) - base.left;
+      const top = Math.min(...rects.map((b) => b.top)) - base.top;
+      Object.assign(crack.style, {
+        inset: "auto",
+        left: `${left}px`,
+        top: `${top}px`,
+        width: `${Math.max(...rects.map((b) => b.right)) - base.left - left}px`,
+        height: `${Math.max(...rects.map((b) => b.bottom)) - base.top - top}px`,
+      });
+    }
+    host.appendChild(crack);
+    this.el.classList.remove("splitting");
+    void this.el.offsetWidth;
+    this.el.classList.add("splitting");
+    setTimeout(() => {
+      crack.remove();
+      this.el.classList.remove("splitting");
+    }, 1250);
   }
 
   /**
    * 红心一颗颗填进空框：每格叠一颗红心，按顺序错开弹出，全部填完再写入新矩阵。
    */
   async fillHearts(changes, nextMatrix, step = 38) {
+    // 到点时直接把这一格画成红心（和正式的红心是同一个元素），只播一次弹出动画；
+    // 全部填完后写入新矩阵时格子已经是红心，不会再替换一次而抽动。
     changes.forEach((ch, i) => {
-      const cell = this.cells.get(`${ch.r},${ch.c}`);
-      if (!cell) return;
-      const heart = document.createElement("span");
-      heart.className = "fill-heart";
-      heart.style.setProperty("--d", `${i * step}ms`);
-      heart.innerHTML = heartSvg(ch.after >= ARMOR ? "armor" : "heart");
-      cell.appendChild(heart);
+      setTimeout(() => {
+        const cell = this.cells.get(`${ch.r},${ch.c}`);
+        if (!cell) return;
+        this.paint(ch.r, ch.c, ch.after);
+        cell.classList.add("filling");
+        setTimeout(() => cell.classList.remove("filling"), 460);
+      }, i * step);
     });
-    await new Promise((r) => setTimeout(r, 460 + changes.length * step));
+    await new Promise((r) => setTimeout(r, 470 + changes.length * step));
     this.set(nextMatrix);
   }
 

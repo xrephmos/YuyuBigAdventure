@@ -179,7 +179,12 @@ export class BoardWorld {
     slab.position.y = -0.14;
     slab.receiveShadow = true;
     slab.castShadow = true;
-    board.add(slab);
+    // 棋盘底板与两圈外框放在一组里：有的章节只显示 7 列，整组按列数收窄、平移到中间。
+    const frame = new THREE.Group();
+    frame.add(slab);
+    board.add(frame);
+    this.boardFrame = frame;
+    this.boardSlab = slab;
     // 两圈细线：棋格外框与棋盘外缘。
     for (const half of [4.0, 4.6])
       for (const [x, z, w, d] of [
@@ -190,11 +195,14 @@ export class BoardWorld {
       ]) {
         const line = new THREE.Mesh(new THREE.BoxGeometry(w, 0.012, d), inkLine);
         line.position.set(x, half === 4.0 ? SURFACE + 0.002 : 0.046, z);
-        board.add(line);
+        frame.add(line);
       }
 
     const lightMat = flat("#fafaf8");
     const darkMat = flat("#c6c5c0");
+    this.tileMats = { light: lightMat, dark: darkMat, plain: flat("#f4f3ef") };
+    this.boardGroup = board;
+    this.boardLabels = [];
     const tileGeo = new THREE.BoxGeometry(1, 0.1, 1);
     this.tiles = [];
     const overlayGeo = new THREE.PlaneGeometry(0.94, 0.94);
@@ -229,6 +237,7 @@ export class BoardWorld {
       number.rotation.x = -Math.PI / 2;
       number.position.set(-4.3, 0.047, i - 3.5);
       board.add(letter, number);
+      this.boardLabels.push(letter, number);
     }
     this.scene.add(board);
     this.buildFog(board);
@@ -390,12 +399,64 @@ export class BoardWorld {
     this.setMarks(new Map());
   }
 
+  /**
+   * 棋盘的显示样式（只改外观，不改格子数据）：
+   *   plain：不用黑白相间的棋格，改成一色的普通格子加细格线，也不标坐标；
+   *   cols：只显示前几列（其余列整列是墙，玩家走不到），底板和外框收窄到这几列，镜头对准它们的中线。
+   */
+  applyDisplay(display = {}) {
+    const cols = display.cols ?? SIZE;
+    const plain = Boolean(display.plain);
+    const shift = -(SIZE - cols) / 2;
+    for (const tile of this.tiles) {
+      const { r, c } = tile.userData;
+      tile.visible = c < cols;
+      tile.material = plain ? this.tileMats.plain : (r + c) % 2 === 0 ? this.tileMats.light : this.tileMats.dark;
+    }
+    this.boardFrame.scale.x = cols / SIZE;
+    this.boardFrame.position.x = shift;
+    // 普通格子样式不要棋盘四周的边框：去掉两圈黑线，底板收到和格子一样大，没有外沿。
+    for (const child of this.boardFrame.children) if (child !== this.boardSlab) child.visible = !plain;
+    const edge = plain ? SIZE / 9.2 : 1;
+    this.boardSlab.scale.set(edge, 1, edge);
+    for (const label of this.boardLabels) label.visible = !plain;
+    if (this.plainGrid) {
+      this.boardGroup.remove(this.plainGrid);
+      this.plainGrid.traverse((o) => o.geometry?.dispose());
+      this.plainGrid = null;
+    }
+    if (plain) {
+      const grid = new THREE.Group();
+      const lineMat = new THREE.MeshBasicMaterial({ color: "#c6c5c0" });
+      const left = tileCenter(0, 0).x - 0.5;
+      const top = tileCenter(0, 0).z - 0.5;
+      for (let c = 1; c < cols; c += 1) {
+        const line = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.006, SIZE), lineMat);
+        line.position.set(left + c, SURFACE + 0.001, 0);
+        grid.add(line);
+      }
+      for (let r = 1; r < SIZE; r += 1) {
+        const line = new THREE.Mesh(new THREE.BoxGeometry(cols, 0.006, 0.02), lineMat);
+        line.position.set(left + cols / 2, SURFACE + 0.001, top + r);
+        grid.add(line);
+      }
+      this.boardGroup.add(grid);
+      this.plainGrid = grid;
+    }
+    this.visibleCols = cols;
+    // 镜头对准显示出来的这几列的中线（resize 里按它重新算默认视角）。
+    this.displayShift = shift;
+    this.resize();
+  }
+
   loadLevel(board) {
     this.clearLevel();
+    this.applyDisplay(board.level.display);
     const rand = seeded(board.level.id * 97);
     board.tiles.forEach((row, r) =>
       row.forEach((tile, c) => {
-        if (!tile.prop) return;
+        // 不显示的列：整列是墙，墙也不画。
+        if (!tile.prop || c >= this.visibleCols) return;
         const prop = makeProp(tile.prop, rand);
         prop.position.copy(tileCenter(r, c));
         prop.userData.tile = [r, c];
@@ -679,7 +740,7 @@ export class BoardWorld {
   /** 墨迹退去：从离出口最远的一排开始，每一格冒出墨色碎块，一排排收向出口，最后出口处一片蓝色碎块。 */
   async recedeInk(exit) {
     for (let r = SIZE - 1; r >= 0; r -= 1) {
-      for (let c = 0; c < SIZE; c += 1) this.burst(tileCenter(r, c).setY(0.12), 2, this.inkMaterial, 0.25);
+      for (let c = 0; c < (this.visibleCols ?? SIZE); c += 1) this.burst(tileCenter(r, c).setY(0.12), 2, this.inkMaterial, 0.25);
       await new Promise((done) => setTimeout(done, 140));
     }
     if (exit) this.burst(tileCenter(exit.r, exit.c).setY(0.4), 30, this.sparkMaterial, 1.2);
@@ -877,7 +938,7 @@ export class BoardWorld {
     const dir = homeDirection(view);
     const dist = Math.max(view.minDistance, view.fitHalfWidth / Math.tan(hHalf));
     // 竖屏（手机）时镜头对准棋盘正中心，棋盘落在屏幕中央；上方信息栏和下方方向键各占一边，不会压住棋盘。
-    const target = new THREE.Vector3(0, 0, portrait ? 0 : 0.3);
+    const target = new THREE.Vector3(this.displayShift ?? 0, 0, portrait ? 0 : 0.3);
     this.homeView = { pos: target.clone().addScaledVector(dir.normalize(), dist), target };
     this.controls.maxDistance = Math.max(20, dist * 1.25);
     // 标题页只剩半屏给棋盘，镜头拉远一些让整张棋盘入镜。

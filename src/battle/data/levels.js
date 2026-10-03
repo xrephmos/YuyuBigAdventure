@@ -397,24 +397,27 @@ export const LEVELS = [
     potions: 3,
     chest: null,
     par: 30,
-    // 王座厅：两道书墙把棋盘分成前庭、大殿、王座三段，每道墙只在 e 线留一个缺口，沿 e 线铺一条墨黑长毯。
+    // 王座厅：不用棋盘的黑白格，改成一色的普通格子，只显示 7 列（第 8 列整列是墙，不画出来），
+    // 暗王坐在最后一排正中，出口就在它脚下：打倒暗王、站上那一格就通关。
+    // 两道书墙把大厅分成前庭、大殿、王座三段，每道墙只在中线留一个缺口，中线铺一条墨黑长毯。
     // 第一座城堡站在殿门的缺口里，不打倒它进不了殿；第二座紧贴着长毯守在殿内，玩家一跨进殿门就会被它扑上来。
     // 其余陈设左右成对，不设迷雾，一进来就能看到全景。
+    display: { plain: true, cols: 7 },
     map: [
-      "c . b . E b . c",
-      ". . b . . . b .",
-      "b b b b . b b b",
-      ". . . . . . . .",
-      "c . . . . . . c",
-      "b b b b . b b b",
-      "U . . . . . . U",
-      "P . . . S . . P",
+      "c b . E . b c b",
+      ". b . . . b . b",
+      "b b b . b b b b",
+      ". . . . . . . b",
+      "c . c . . . c b",
+      "b b b . b b b b",
+      "U . . . . . U b",
+      "P . . S . . P b",
     ],
-    carpet: [2, 3, 4, 5, 6, 7].map((r) => [r, 4]),
+    carpet: [1, 2, 3, 4, 5, 6, 7].map((r) => [r, 3]),
     monsters: [
-      { type: "king", at: [1, 4], ai: "static" },
-      { type: "rook", at: [5, 4], ai: "static", drop: "potion" },
-      { type: "rook", at: [4, 5], ai: "chase", sight: 1, drop: "potion" },
+      { type: "king", at: [0, 3], ai: "static" },
+      { type: "rook", at: [5, 3], ai: "static", drop: "potion" },
+      { type: "rook", at: [4, 4], ai: "chase", sight: 1, drop: "potion" },
     ],
   },
 ];

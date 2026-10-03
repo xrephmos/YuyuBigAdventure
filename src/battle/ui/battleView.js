@@ -607,6 +607,25 @@ export function runBattle({ root, combat, monster, world, sfx, heroFirst, featur
     }
     if (broken) sfx.play("shatter", broken);
     if (cracked) sfx.play("crack");
+    // 打断在锤子落下的那一刻爆开，再碎心。
+    if (interrupting) {
+      // 打断：画面反白一闪，心阵被劈开再合拢，怪物的「下一招」横条断开掉落，整张卡片一震。
+      sfx.play("glass");
+      sfx.play("impact", 6);
+      for (const cls of ["break-flash", "impact"]) {
+        modal.classList.remove(cls);
+        void modal.offsetWidth;
+        modal.classList.add(cls);
+      }
+      setTimeout(() => modal.classList.remove("break-flash"), 160);
+      enemyView.fracture();
+      const intent = $("[data-side=enemy] .intent");
+      intent.classList.remove("broken");
+      void intent.offsetWidth;
+      intent.classList.add("broken");
+      setTimeout(() => intent.classList.remove("broken"), 900);
+      setTimeout(() => floatText("enemy", "打断！", "dmg big"), 200);
+    }
     floatText("enemy", `-${event.hits.length}`, heavy ? "dmg big" : "dmg");
     enemyView.shake(heavy);
     // 首领进入二阶段时，战斗状态里已经是新心阵：碎心动画先落在旧心阵上，新心阵留给转场演出。
@@ -648,11 +667,6 @@ export function runBattle({ root, combat, monster, world, sfx, heroFirst, featur
     }
     if (result.events.some((e) => e.type === "parry")) {
       setTimeout(() => floatText("hero", "招架", "chase"), 360);
-    }
-    if (interrupting) {
-      sfx.play("glass");
-      enemyView.glassCrack();
-      setTimeout(() => floatText("enemy", "打断！", "chase"), 220);
     }
     const drained = result.events.find((e) => e.type === "heal" && e.side === "hero");
     if (drained) {

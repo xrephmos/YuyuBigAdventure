@@ -979,6 +979,11 @@ async function battle(monster, heroFirst) {
     if (event.type === "pickup") await pickup(event.item);
   }
   await restore;
+  if (events.some((e) => e.type === "exit")) {
+    renderHud();
+    await levelComplete();
+    return;
+  }
   world.updateFog(board);
   if (combat.phase === "fled") world.updateMonster(monster);
   renderHud();
