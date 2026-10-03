@@ -1227,7 +1227,7 @@ test("怪物的死灭攻击：打空的格子本场战斗里药水和汲血都�
   assert.equal(countHearts(combat.monsterMatrix).hearts, before + 1);
 });
 
-test("王座厅：殿门只有一个缺口，守门的城堡站在缺口里；不打倒它就走不到暗王身边", () => {
+test("王座厅：殿门只有一个缺口，守门的城堡站在缺口里，殿内的城堡站在长毯上；不打倒它们就走不到暗王身边", () => {
   const board = createBoard(level("checkmate"), { weapons: STARTING_WEAPONS });
   const king = board.monsters.find((m) => m.def.id === "king");
   const gate = board.monsters.find((m) => m.def.id === "rook" && m.ai === "static");
@@ -1246,10 +1246,13 @@ test("王座厅：殿门只有一个缺口，守门的城堡站在缺口里；�
     return seen;
   };
   const besideKing = (seen) => [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dr, dc]) => seen.has(`${king.r + dr},${king.c + dc}`));
+  const hall = board.monsters.find((m) => m.def.id === "rook" && m.ai === "chase");
   const monsters = new Set(board.monsters.map((m) => `${m.r},${m.c}`));
   assert.equal(besideKing(reachable(monsters)), false, "守门的城堡挡住了唯一的缺口");
   monsters.delete(`${gate.r},${gate.c}`);
-  assert.equal(besideKing(reachable(monsters)), true, "打倒它，路就通了");
+  assert.equal(besideKing(reachable(monsters)), false, "殿内的城堡挡在长毯上");
+  monsters.delete(`${hall.r},${hall.c}`);
+  assert.equal(besideKing(reachable(monsters)), true, "两座都打倒，路就通了");
   assert.ok(!board.level.fog, "王座厅没有迷雾");
 });
 
@@ -1280,4 +1283,15 @@ test("王座厅：暗王坐在最后一排正中、守在出口上；打倒它�
   const events = resolveBattle(board, king, won, true);
   assert.ok(events.some((e) => e.type === "exit"), "站上出口");
   assert.equal(board.over, "won");
+});
+
+test("王座厅：地图与怪物都以显示出来的几列的中线左右对称", () => {
+  const lvl = level("checkmate");
+  const cols = lvl.display.cols;
+  const mid = (cols - 1) / 2;
+  // 出口和起点只有一格，就在中线上；其余格子左右镜像相同。
+  const rows = lvl.map.map((line) => [...line.replace(/\s+/g, "")].slice(0, cols).join(""));
+  for (const row of rows) assert.equal(row, [...row].reverse().join(""), `「${row}」不对称`);
+  for (const m of lvl.monsters) assert.equal(m.at[1], mid, `${m.type} 不在中线上`);
+  for (const [, c] of lvl.carpet) assert.equal(c, mid, "长毯铺在中线上");
 });

@@ -400,6 +400,49 @@ export class BoardWorld {
   }
 
   /**
+   * 向四周延伸的地面：一张和格子同色、同样格线的大平面，铺在棋盘一圈之外，从大厅边缘往外逐渐淡出。
+   * 格线落在整数坐标上，和棋盘的格子严丝合缝；center 是大厅中线的 x 坐标。
+   */
+  buildExtension(center) {
+    const UNITS = 40;
+    const PX = 40;
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = UNITS * PX;
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#f4f3ef";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.strokeStyle = "#bdbcb6";
+    ctx.lineWidth = 1.6;
+    for (let i = 0; i <= UNITS; i += 1) {
+      ctx.beginPath();
+      ctx.moveTo(i * PX, 0);
+      ctx.lineTo(i * PX, canvas.height);
+      ctx.moveTo(0, i * PX);
+      ctx.lineTo(canvas.width, i * PX);
+      ctx.stroke();
+    }
+    // 从大厅中心往外淡出：大厅范围内不透明，之后逐渐透明。
+    const fade = ctx.createRadialGradient(canvas.width / 2, canvas.height / 2, 5 * PX, canvas.width / 2, canvas.height / 2, 19 * PX);
+    fade.addColorStop(0, "rgba(0, 0, 0, 1)");
+    fade.addColorStop(1, "rgba(0, 0, 0, 0)");
+    ctx.globalCompositeOperation = "destination-in";
+    ctx.fillStyle = fade;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = 4;
+    const floor = new THREE.Mesh(
+      new THREE.PlaneGeometry(UNITS, UNITS),
+      new THREE.MeshStandardMaterial({ map: tex, transparent: true, roughness: 0.9, metalness: 0, depthWrite: false }),
+    );
+    floor.rotation.x = -Math.PI / 2;
+    // 平面的中心要落在格线上（整数坐标），大厅中线在半格处时往旁边挪半格。
+    floor.position.set(Math.round(center), SURFACE - 0.002, 0);
+    floor.receiveShadow = true;
+    return floor;
+  }
+
+  /**
    * 棋盘的显示样式（只改外观，不改格子数据）：
    *   plain：不用黑白相间的棋格，改成一色的普通格子加细格线，也不标坐标；
    *   cols：只显示前几列（其余列整列是墙，玩家走不到），底板和外框收窄到这几列，镜头对准它们的中线。
@@ -419,6 +462,19 @@ export class BoardWorld {
     for (const child of this.boardFrame.children) if (child !== this.boardSlab) child.visible = !plain;
     const edge = plain ? SIZE / 9.2 : 1;
     this.boardSlab.scale.set(edge, 1, edge);
+    // 普通格子样式不要底板：四周铺一圈同样的格子，越远越淡，看起来大厅一直往外延伸。
+    this.boardSlab.visible = !plain;
+    if (this.extension) {
+      this.boardGroup.remove(this.extension);
+      this.extension.geometry.dispose();
+      this.extension.material.map.dispose();
+      this.extension.material.dispose();
+      this.extension = null;
+    }
+    if (plain) {
+      this.extension = this.buildExtension(shift);
+      this.boardGroup.add(this.extension);
+    }
     for (const label of this.boardLabels) label.visible = !plain;
     if (this.plainGrid) {
       this.boardGroup.remove(this.plainGrid);
