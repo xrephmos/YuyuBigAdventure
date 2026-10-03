@@ -2105,6 +2105,17 @@ body:not(.in-level) .hint-bar {
   animation: heal-in 0.45s var(--d, 0ms) var(--ease-entry) both;
 }
 
+/* 叠上去的红心和填完后的正式红心一样大：格子这时还是空框状态，不能沿用空框里缩小的尺寸。 */
+.cell.empty .fill-heart .heart-svg {
+  width: 78%;
+  height: 78%;
+}
+
+.cell.empty .fill-heart .heart-svg.armor {
+  width: 92%;
+  height: 92%;
+}
+
 .shard {
   position: absolute;
   width: 6px;
