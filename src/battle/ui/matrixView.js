@@ -252,6 +252,23 @@ export class MatrixView {
     for (const [r, c] of cells ?? []) this.cells.get(`${r},${c}`)?.classList.add("heal-plan");
   }
 
+  /**
+   * 红心一颗颗填进空框：每格叠一颗红心，按顺序错开弹出，全部填完再写入新矩阵。
+   */
+  async fillHearts(changes, nextMatrix, step = 38) {
+    changes.forEach((ch, i) => {
+      const cell = this.cells.get(`${ch.r},${ch.c}`);
+      if (!cell) return;
+      const heart = document.createElement("span");
+      heart.className = "fill-heart";
+      heart.style.setProperty("--d", `${i * step}ms`);
+      heart.innerHTML = heartSvg(ch.after >= ARMOR ? "armor" : "heart");
+      cell.appendChild(heart);
+    });
+    await new Promise((r) => setTimeout(r, 460 + changes.length * step));
+    this.set(nextMatrix);
+  }
+
   async animate(changes, kind, nextMatrix, { heavy = false } = {}) {
     const cls = { hit: "breaking", crack: "cracking", heal: "healing", armor: "armoring" };
     for (const [i, ch] of changes.entries()) {

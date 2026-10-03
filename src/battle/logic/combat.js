@@ -452,7 +452,7 @@ export function heroAttack(state, weaponId, r, c) {
 
 /**
  * 首领的二阶段：心阵第一次清空时不倒下，换成另一种形状的心阵重新补满，招式循环换成新的一套，从头开始。
- * 连击、追击、定身、打断都清零；主角的武器冷却也一并清空，喘一口气，仍由主角先出手。
+ * 连击、追击、定身、打断都清零；主角的武器冷却也一并清空，然后由首领先出手。
  */
 function rebirth(state, events) {
   const next = state.def.rebirth;
@@ -469,7 +469,8 @@ function rebirth(state, events) {
   state.stunned = false;
   state.interrupted = false;
   for (const slot of state.weapons) if (slot.kind === "weapon") slot.cd = 0;
-  state.phase = "hero";
+  // 重新站起之后由首领先出手。
+  state.phase = "monster";
   state.log.push(`${state.def.name}的王冠倾斜了，墨迹重新聚拢。`);
   events.push({ type: "rebirth", title: next.title });
   planIntent(state);

@@ -944,7 +944,9 @@ async function battle(monster, heroFirst) {
   // 逐个指着界面讲已经解锁的部分；连击等第一次完美命中、心阵上出现虚线框之后再讲。
   const topics = battleTopics(monster, features);
   const ctx = { weapons: board.hero.weapons, skills: Object.keys(board.hero.skills) };
-  sfx.music.play(BATTLE_TRACK[monster.def.id] ?? "battle");
+  // 首领战：关卡音乐先淡出，等开场演出播完再由战斗界面推上首领曲，两首不会叠在一起。
+  if (monster.def.boss) sfx.music.play(null, { fadeOut: 0.8 });
+  else sfx.music.play(BATTLE_TRACK[monster.def.id] ?? "battle");
   await runBattle({
     root: $("#battle-root"),
     combat,

@@ -390,7 +390,7 @@ export const LEVELS = [
     name: "暗王的棋局",
     english: "CHECKMATE",
     story: "墨迹的源头位于棋盘尽头。暗王端坐王座，一座城堡把守殿门，另一座在殿内巡守。",
-    tip: "殿门只有一条路，城堡守在门口；进殿之后，殿内的城堡会上前拦截。决战前有两座[铁砧]。",
+    tip: "殿门只有一条路，城堡守在门口；跨进殿门时，殿内的城堡会扑上来。决战前有两座[铁砧]。",
     goal: "boss",
     goalText: "击败暗王，解开[出口]的封印",
     hero: { rows: 7, cols: 7 },
@@ -398,7 +398,7 @@ export const LEVELS = [
     chest: null,
     par: 30,
     // 王座厅：两道书墙把棋盘分成前庭、大殿、王座三段，每道墙只在 e 线留一个缺口，沿 e 线铺一条墨黑长毯。
-    // 第一座城堡站在殿门的缺口里，不打倒它进不了殿；第二座在大殿里巡守，玩家一走上长毯就会被它截住。
+    // 第一座城堡站在殿门的缺口里，不打倒它进不了殿；第二座紧贴着长毯守在殿内，玩家一跨进殿门就会被它扑上来。
     // 其余陈设左右成对，不设迷雾，一进来就能看到全景。
     map: [
       "c . b . E b . c",
@@ -414,7 +414,7 @@ export const LEVELS = [
     monsters: [
       { type: "king", at: [1, 4], ai: "static" },
       { type: "rook", at: [5, 4], ai: "static", drop: "potion" },
-      { type: "rook", at: [3, 6], ai: "chase", sight: 3, drop: "potion" },
+      { type: "rook", at: [4, 5], ai: "chase", sight: 1, drop: "potion" },
     ],
   },
 ];

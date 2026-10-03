@@ -606,9 +606,11 @@ export function runBattle({ root, combat, monster, world, sfx, heroFirst, featur
     const reborn = result.events.find((e) => e.type === "rebirth");
     await enemyView.animate(event.hits, "hit", reborn ? applyChanges(enemyView.matrix, event.hits) : combat.monsterMatrix, { heavy });
     if (reborn) {
+      // 二阶段由暗王先出手。
       await playRebirth(reborn);
-      busy = false;
       render();
+      await delay(300);
+      await enemyPhase();
       return;
     }
     const comboEvent = result.events.find((e) => e.type === "combo");
@@ -711,16 +713,20 @@ export function runBattle({ root, combat, monster, world, sfx, heroFirst, featur
     const cells = [];
     matrix.forEach((row, r) => row.forEach((v, c) => v > EMPTY && cells.push({ r, c, before: EMPTY, after: v })));
     if (fromBottom) cells.sort((a, b) => b.r - a.r || a.c - b.c);
-    await enemyView.animate(cells, "heal", matrix);
+    // 先一格格排出白色的空框，再把红心一颗颗填进去。
+    const frames = matrix.map((row) => row.map((v) => (v > EMPTY ? EMPTY : v)));
+    await enemyView.animate(cells, "heal", frames);
+    await enemyView.fillHearts(cells, matrix);
   }
 
-  /** 暗王开场：标题卡，然后心阵聚拢。 */
+  /** 暗王开场：钟声与标题，心阵聚拢，然后首领曲才慢慢推上来。 */
   async function playBossIntro() {
     sfx.play("toll");
     const shown = stageCard("Boss · 终章", `${def.name} · ${def.title}`, 1500);
     await delay(700);
     await assembleEnemy(combat.monsterMatrix);
     await shown;
+    sfx.music.play("boss", { fadeIn: 3 });
   }
 
   /**

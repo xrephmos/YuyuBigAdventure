@@ -2096,6 +2096,15 @@ body:not(.in-level) .hint-bar {
   animation: armor-in 0.5s var(--d, 0ms);
 }
 
+/* 红心填进空框：叠在空框上面，按顺序错开弹出。 */
+.cell .fill-heart {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  animation: heal-in 0.45s var(--d, 0ms) var(--ease-entry) both;
+}
+
 .shard {
   position: absolute;
   width: 6px;

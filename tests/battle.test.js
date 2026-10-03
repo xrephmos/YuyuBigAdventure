@@ -1188,12 +1188,14 @@ test("暗王二阶段：心阵第一次清空时不倒下，换成另一种形�
   const result = heroAttack(combat, "dagger", 0, 0);
   assert.ok(result.events.some((e) => e.type === "rebirth"), "触发二阶段");
   assert.ok(!result.events.some((e) => e.type === "won"), "这一下不算胜利");
-  assert.equal(combat.phase, "hero", "仍由主角先出手");
+  assert.equal(combat.phase, "monster", "二阶段由暗王先出手");
   assert.deepEqual(combat.monsterMatrix, king.rebirth.matrixValues, "换成二阶段的满血心阵");
   assert.equal(combat.weapons[1].cd, 0, "武器冷却清空");
   assert.equal(combat.intent, king.rebirth.pattern[0], "招式从新的一套第一招开始");
 
-  // 二阶段再清空：胜利。
+  // 暗王先出手，然后二阶段再清空：胜利。
+  monsterTurn(combat);
+  assert.equal(combat.phase, "hero");
   combat.monsterMatrix = parseMatrix(["#"]);
   const final = heroAttack(combat, "dagger", 0, 0);
   assert.ok(final.events.some((e) => e.type === "won"));
@@ -1249,4 +1251,17 @@ test("王座厅：殿门只有一个缺口，守门的城堡站在缺口里；�
   monsters.delete(`${gate.r},${gate.c}`);
   assert.equal(besideKing(reachable(monsters)), true, "打倒它，路就通了");
   assert.ok(!board.level.fog, "王座厅没有迷雾");
+});
+
+test("王座厅：跨进殿门的那一步，殿内的城堡一定会扑上来", () => {
+  const board = createBoard(level("checkmate"), { weapons: STARTING_WEAPONS });
+  const gate = board.monsters.find((m) => m.def.id === "rook" && m.ai === "static");
+  const hall = board.monsters.find((m) => m.def.id === "rook" && m.ai === "chase");
+  gate.alive = false;
+  board.hero.r = gate.r;
+  board.hero.c = gate.c;
+  assert.equal(advanceMonsters(board).ambush, null, "站在殿门口还没被发现");
+  const moved = heroMove(board, gate.r - 1, gate.c);
+  assert.equal(moved.kind, "moved");
+  assert.equal(advanceMonsters(board).ambush, hall, "一进殿就被扑上来");
 });
