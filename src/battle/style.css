@@ -4996,6 +4996,11 @@ body:not(.in-level) .hint-bar {
   animation: strike-flash-heavy 0.42s ease-out forwards;
 }
 
+/* 怪物打在主角身上：闪成红色。 */
+.cell.strike-foe::after {
+  background: var(--heart);
+}
+
 @keyframes strike-flash {
   0% {
     opacity: 0.85;

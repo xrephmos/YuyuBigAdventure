@@ -1290,7 +1290,9 @@ html {
   display: none;
 }
 
-.battle-modal.portrait.heal-mode .side.hero .matrix-box {
+/* 怪物打中主角时（hurt-pop）复用同一个浮窗：放大演示红心被打碎，外框换成红色。 */
+.battle-modal.portrait.heal-mode .side.hero .matrix-box,
+.battle-modal.portrait.hurt-pop .side.hero .matrix-box {
   /* 绝对定位的网格子项默认以自己的网格区域为参照，改回 auto 才能横跨整个主角区。 */
   grid-area: auto;
   position: absolute;
@@ -1333,7 +1335,12 @@ html {
   }
 }
 
-.battle-modal.portrait.heal-mode.heal-closing .side.hero .matrix-box {
+.battle-modal.portrait.hurt-pop .side.hero .matrix-box {
+  outline: 2px solid var(--heart);
+}
+
+.battle-modal.portrait.heal-mode.heal-closing .side.hero .matrix-box,
+.battle-modal.portrait.hurt-pop.heal-closing .side.hero .matrix-box {
   animation: heal-close 0.17s cubic-bezier(0.4, 0, 1, 1) forwards;
 }
 
@@ -1368,7 +1375,8 @@ html {
   .battle-modal.portrait {
     --hero-box: 104px;
   }
-  .battle-modal.portrait.heal-mode .side.hero .matrix-box {
+  .battle-modal.portrait.heal-mode .side.hero .matrix-box,
+  .battle-modal.portrait.hurt-pop .side.hero .matrix-box {
     height: 44vh;
     height: 44dvh;
   }

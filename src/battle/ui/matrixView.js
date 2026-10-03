@@ -206,15 +206,19 @@ export class MatrixView {
   }
 
   /** 播放格子变化动画，然后写入新矩阵。 */
-  /** 出手瞬间：武器形状盖住的格子先闪一下，再碎。heavy 时闪得更重。 */
-  strike(cells, { heavy = false } = {}) {
+  /**
+   * 出手瞬间：武器形状盖住的格子先闪一下，再碎。heavy 时闪得更重。
+   * foe：怪物打在主角身上，闪成红色。
+   */
+  strike(cells, { heavy = false, foe = false } = {}) {
     for (const [r, c] of cells) {
       const cell = this.cells.get(`${r},${c}`);
       if (!cell) continue;
-      cell.classList.remove("strike", "strike-heavy");
+      cell.classList.remove("strike", "strike-heavy", "strike-foe");
       void cell.offsetWidth;
       cell.classList.add(heavy ? "strike-heavy" : "strike");
-      setTimeout(() => cell.classList.remove("strike", "strike-heavy"), 420);
+      if (foe) cell.classList.add("strike-foe");
+      setTimeout(() => cell.classList.remove("strike", "strike-heavy", "strike-foe"), 420);
     }
     if (heavy) {
       // 冲击波：以形状中心为圆心扩散的一圈方框。

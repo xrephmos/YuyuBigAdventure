@@ -8,7 +8,7 @@ import { patternListHtml } from "./monsterIntel.js";
 import { getHeroName } from "../data/heroName.js";
 import { ALL_FEATURES } from "../data/features.js";
 import { battleLayout, isTouch } from "./device.js";
-import { countHearts, reach } from "../logic/shapes.js";
+import { countHearts, reach, footprint } from "../logic/shapes.js";
 import {
   heroAttack,
   heroHeal,
@@ -681,6 +681,30 @@ export function runBattle({ root, combat, monster, world, sfx, heroFirst, featur
 
   /** 收起浮窗用的时长，与 phone.css 里 heal-close 动画一致。 */
   const HEAL_CLOSE_MS = 170;
+  /** 弹出浮窗用的时长，与 phone.css 里 heal-pop 动画一致。 */
+  const HEAL_POP_MS = 260;
+
+  /**
+   * 怪物出手：竖屏手机上主角心阵很小，被打中时和喝药一样弹出放大的浮窗，
+   * 浮窗里先标出这一招盖住的格子，再演示红心被打碎。其余布局心阵本来就够大，不弹窗。
+   * 返回是否弹出了浮窗。
+   */
+  async function openHurtPop(event) {
+    if (!stacked) return false;
+    modal.classList.add("hurt-pop");
+    refitNow();
+    // 浮窗里的格子是按新尺寸重建的，把这一招的墨黑格重新标上。
+    if (event.anchor) heroView.markAim(event.intent.shape, event.anchor);
+    await delay(HEAL_POP_MS);
+    return true;
+  }
+
+  async function closeHurtPop() {
+    modal.classList.add("heal-closing");
+    await delay(HEAL_CLOSE_MS);
+    modal.classList.remove("heal-closing", "hurt-pop");
+    refitNow();
+  }
 
   /**
    * 退出喝药状态。竖屏手机上先播放浮窗收起的动画，再切回普通布局并立刻按原尺寸重排心阵；
@@ -756,7 +780,14 @@ export function runBattle({ root, combat, monster, world, sfx, heroFirst, featur
     for (const event of result.events) {
       if (event.type === "monster-attack") {
         if (target && heroObj) world.attackAnim(target, heroObj, event.hits.length);
-        await delay(170);
+        // 打中或被格挡时：主角心阵弹出放大的浮窗（竖屏手机），先闪出这一招盖住的格子，再在浮窗里碎心。
+        const popped = (event.blocked || event.hits.length > 0) && (await openHurtPop(event));
+        if (!popped) await delay(170);
+        const heavy = event.hits.length >= 4;
+        if (event.anchor) {
+          heroView.strike(footprint(event.intent.shape, event.anchor.r, event.anchor.c), { heavy, foe: !event.blocked });
+          await delay(heavy ? 240 : 150);
+        }
         if (event.blocked) {
           sfx.play("block");
           floatText("hero", "格挡", "block");
@@ -765,14 +796,20 @@ export function runBattle({ root, combat, monster, world, sfx, heroFirst, featur
           await delay(500);
         } else if (event.hits.length) {
           sfx.play("hurt");
-          floatText("hero", `-${event.hits.length}`, "dmg");
-          heroView.shake();
+          if (heavy) sfx.play("impact", event.hits.length);
+          floatText("hero", `-${event.hits.length}`, heavy ? "dmg big" : "dmg");
+          heroView.shake(heavy);
           modal.classList.add("hurt");
           setTimeout(() => modal.classList.remove("hurt"), 400);
-          await heroView.animate(event.hits, "hit", combat.heroMatrix);
+          await heroView.animate(event.hits, "hit", combat.heroMatrix, { heavy });
         } else {
           floatText("hero", "未命中", "miss");
           await delay(400);
+        }
+        if (popped) {
+          // 让玩家看清少了哪几颗心，再收起浮窗。
+          await delay(420);
+          await closeHurtPop();
         }
       } else if (event.type === "charge") {
         sfx.play("charge");

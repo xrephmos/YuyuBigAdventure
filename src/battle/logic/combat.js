@@ -614,7 +614,7 @@ export function monsterTurn(state) {
         : [];
       state.stats.blocked += would.length;
       state.log.push(`防御挡下了「${intent.name}」。`);
-      events.push({ type: "monster-attack", intent, hits: [], blocked: true });
+      events.push({ type: "monster-attack", intent, hits: [], blocked: true, anchor: state.aim });
     } else {
       const hits = monsterHits(state);
       if (state.parried && state.aim) state.log.push("招架卸掉了 1 颗心的伤害。");
