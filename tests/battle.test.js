@@ -237,7 +237,7 @@ function reachable(board, from) {
     for (const [dr, dc] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
       const nr = r + dr;
       const nc = c + dc;
-      if (nr < 0 || nc < 0 || nr >= board.size || nc >= board.size) continue;
+      if (nr < 0 || nc < 0 || nr >= board.rows || nc >= board.cols) continue;
       const item = board.items.get(key(nr, nc));
       if (board.tiles[nr][nc].prop || seen.has(key(nr, nc))) continue;
       if (item && item.type === "forge") continue;
@@ -248,10 +248,11 @@ function reachable(board, from) {
   return seen;
 }
 
-test("每一关都是 8×8，出口、宝箱、钥匙、药水、铁砧都能走到", () => {
+test("每一关都是 8 列、8 行（终章的大厅长一倍，16 行），出口、宝箱、钥匙、药水、铁砧都能走到", () => {
   LEVELS.forEach((level, index) => {
     const board = createBoard(level, { weapons: weaponsForLevel(index, STARTING_WEAPONS) });
-    assert.equal(board.size, 8, level.name);
+    assert.equal(board.cols, 8, level.name);
+    assert.equal(board.rows, level.key === "checkmate" ? 16 : 8, level.name);
     level.map.forEach((row) => assert.equal(row.replace(/\s+/g, "").length, 8, level.name));
     const seen = reachable(board, board.hero);
     assert.ok(seen.has(key(board.exit.r, board.exit.c)), `${level.name} 出口不可达`);
@@ -1256,17 +1257,17 @@ test("王座厅：殿门只有一个缺口，守门的城堡站在缺口里，�
   assert.ok(!board.level.fog, "王座厅没有迷雾");
 });
 
-test("王座厅：跨进殿门的那一步，殿内的城堡一定会扑上来", () => {
+test("王座厅：踏进内门缺口的那一步，门后的城堡一定会扑上来", () => {
   const board = createBoard(level("checkmate"), { weapons: STARTING_WEAPONS });
   const gate = board.monsters.find((m) => m.def.id === "rook" && m.ai === "static");
   const hall = board.monsters.find((m) => m.def.id === "rook" && m.ai === "chase");
   gate.alive = false;
-  board.hero.r = gate.r;
-  board.hero.c = gate.c;
-  assert.equal(advanceMonsters(board).ambush, null, "站在殿门口还没被发现");
-  const moved = heroMove(board, gate.r - 1, gate.c);
+  board.hero.r = hall.r + 2;
+  board.hero.c = hall.c;
+  assert.equal(advanceMonsters(board).ambush, null, "走到内门前还没被发现");
+  const moved = heroMove(board, hall.r + 1, hall.c);
   assert.equal(moved.kind, "moved");
-  assert.equal(advanceMonsters(board).ambush, hall, "一进殿就被扑上来");
+  assert.equal(advanceMonsters(board).ambush, hall, "一踏进缺口就被扑上来");
 });
 
 test("王座厅：暗王坐在最后一排正中、守在出口上；打倒它就站上出口，本章完成", () => {
@@ -1276,7 +1277,7 @@ test("王座厅：暗王坐在最后一排正中、守在出口上；打倒它�
   assert.equal(king.c, (board.level.display.cols - 1) / 2, "显示出来的几列的正中");
   assert.deepEqual([board.exit.r, board.exit.c], [king.r, king.c], "出口在暗王脚下");
   // 不显示的列整列是墙，走不进去。
-  for (let r = 0; r < 8; r += 1) assert.equal(heroCanEnter(board, r, board.level.display.cols).ok, false);
+  for (let r = 0; r < board.rows; r += 1) assert.equal(heroCanEnter(board, r, board.level.display.cols).ok, false);
   board.hero.r = king.r + 1;
   board.hero.c = king.c;
   const won = { phase: "won", heroMatrix: board.hero.matrix, potions: 0, stats: { taken: 0 }, weapons: [], monsterMatrix: [[0]], step: 0 };

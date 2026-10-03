@@ -24,6 +24,9 @@ import { key, isVisible, isExplored } from "../logic/board.js";
 const ITEM_MODELS = { chest: makeChest, potion: makePotion, forge: makeForge, key: makeKey, plate: makePlate };
 
 const SIZE = 8;
+// 当前章节棋盘的行数与列数（多数章节 8×8，终章的大厅 16 行）。tileCenter 以它们为准把棋盘居中。
+let ROWS = SIZE;
+let COLS = SIZE;
 const SURFACE = 0.05;
 const ease = {
   linear: (t) => t,
@@ -52,7 +55,7 @@ function homeDirection({ polar, azimuth }) {
   return new THREE.Vector3(-Math.sin(a) * Math.sin(p), Math.cos(p), Math.cos(a) * Math.sin(p));
 }
 
-export const tileCenter =(r, c) => new THREE.Vector3(c - (SIZE - 1) / 2, SURFACE, r - (SIZE - 1) / 2);
+export const tileCenter = (r, c) => new THREE.Vector3(c - (COLS - 1) / 2, SURFACE, r - (ROWS - 1) / 2);
 
 function seeded(seed) {
   let s = seed % 2147483647 || 1;
@@ -156,6 +159,77 @@ export class BoardWorld {
     glow.position.set(-2, 9, 1);
     glow.target.position.set(0, 0, 0);
     this.scene.add(hemi, lamp, rim, glow, glow.target);
+    this.lights = { hemi, lamp, glow };
+  }
+
+  /**
+   * 长棋盘（行数超过 8）：镜头跟着主角沿长边推进，往前多看一点；灯光与阴影范围一起跟过去。
+   * 只平移镜头，不改变玩家转过的角度和缩放。
+   */
+  follow(r, duration = 450) {
+    if (ROWS <= SIZE) return Promise.resolve();
+    const ahead = 1.5;
+    const lo = tileCenter(2, 0).z;
+    const hi = tileCenter(ROWS - 3, 0).z;
+    const z = Math.min(hi, Math.max(lo, tileCenter(r, 0).z - ahead));
+    const dz = z - (this.followZ ?? 0);
+    this.followZ = z;
+    if (!dz) return Promise.resolve();
+    const shift = new THREE.Vector3(0, 0, dz);
+    this.homeView.pos.add(shift);
+    this.homeView.target.add(shift);
+    const { lamp, glow } = this.lights;
+    this.lightZ = (this.lightZ ?? 0) + dz;
+    lamp.position.z += dz;
+    lamp.target.position.z += dz;
+    glow.position.z += dz;
+    glow.target.position.z += dz;
+    lamp.target.updateMatrixWorld();
+    glow.target.updateMatrixWorld();
+    if (!duration || this.savedView) {
+      this.camera.position.add(shift);
+      this.controls.target.add(shift);
+      this.controls.update();
+      return Promise.resolve();
+    }
+    return this.moveCamera(this.camera.position.clone().add(shift), this.controls.target.clone().add(shift), duration);
+  }
+
+  /**
+   * 越靠近首领越暗：t 从 0 到 1，背景、桌面和环境光一起压暗；大厅中央的格子还亮着，四周沉进黑暗里。
+   */
+  setGloom(t, duration = 700) {
+    const base = this.gloomBase ?? (this.gloomBase = {
+      bg: this.scene.background.clone(),
+      table: this.table.material.color.clone(),
+      hemi: this.lights.hemi.intensity,
+      lamp: this.lights.lamp.intensity,
+      env: this.scene.environmentIntensity,
+      tile: this.tileMats.plain.color.clone(),
+    });
+    const from = this.gloom ?? 0;
+    this.gloom = t;
+    const dark = new THREE.Color("#121212");
+    const darkTable = new THREE.Color("#262626");
+    // 大厅外的地面压到接近墨黑，大厅里的格子只暗一点：越往里走，越像只有中间这条路还亮着。
+    const darkFloor = new THREE.Color("#2a2a28");
+    const dimTile = new THREE.Color("#c9c8c2");
+    const apply = (k) => {
+      const g = from + (t - from) * k;
+      const e = g ** 1.3;
+      this.scene.background.copy(base.bg).lerp(dark, e);
+      this.table.material.color.copy(base.table).lerp(darkTable, e);
+      this.lights.hemi.intensity = base.hemi * (1 - 0.45 * e);
+      this.lights.lamp.intensity = base.lamp * (1 - 0.3 * e);
+      this.scene.environmentIntensity = base.env * (1 - 0.5 * e);
+      this.tileMats.plain.color.copy(base.tile).lerp(dimTile, e);
+      if (this.extension) this.extension.material.color.set("#ffffff").lerp(darkFloor, e);
+    };
+    if (!duration) {
+      apply(1);
+      return Promise.resolve();
+    }
+    return this.tween(duration, apply);
   }
 
   buildTable() {
@@ -168,6 +242,7 @@ export class BoardWorld {
     table.position.y = -0.32;
     table.receiveShadow = true;
     this.scene.add(table);
+    this.table = table;
   }
 
   /** 扁平棋盘：纸白与浅灰两色方格，墨黑细线勾边，等宽字体坐标。 */
@@ -203,29 +278,7 @@ export class BoardWorld {
     this.tileMats = { light: lightMat, dark: darkMat, plain: flat("#f4f3ef") };
     this.boardGroup = board;
     this.boardLabels = [];
-    const tileGeo = new THREE.BoxGeometry(1, 0.1, 1);
-    this.tiles = [];
-    const overlayGeo = new THREE.PlaneGeometry(0.94, 0.94);
-    this.overlays = [];
     this.markMaterials = this.buildMarkMaterials();
-    for (let r = 0; r < SIZE; r += 1)
-      for (let c = 0; c < SIZE; c += 1) {
-        const tile = new THREE.Mesh(tileGeo, (r + c) % 2 === 0 ? lightMat : darkMat);
-        const p = tileCenter(r, c);
-        tile.position.set(p.x, 0, p.z);
-        tile.receiveShadow = true;
-        tile.userData = { r, c };
-        board.add(tile);
-        this.tiles.push(tile);
-        const overlay = new THREE.Mesh(overlayGeo, this.markMaterials.move);
-        overlay.rotation.x = -Math.PI / 2;
-        overlay.position.set(p.x, SURFACE + 0.004, p.z);
-        overlay.visible = false;
-        overlay.renderOrder = 2;
-        board.add(overlay);
-        this.overlays.push(overlay);
-      }
-
     const letters = "abcdefgh";
     const labelMat = (text) =>
       new THREE.MeshBasicMaterial({ map: labelTexture(text), transparent: true, depthWrite: false, toneMapped: false });
@@ -240,14 +293,71 @@ export class BoardWorld {
       this.boardLabels.push(letter, number);
     }
     this.scene.add(board);
-    this.buildFog(board);
+    this.buildFog();
+    this.buildGrid();
+  }
+
+  /** 格子、高亮标记层与迷雾块：按当前的行列数建一遍；换到行列数不同的章节时整组重建。 */
+  buildGrid() {
+    if (this.gridGroup) {
+      this.boardGroup.remove(this.gridGroup);
+      this.gridGroup.traverse((o) => o.geometry?.dispose());
+    }
+    const grid = new THREE.Group();
+    const tileGeo = new THREE.BoxGeometry(1, 0.1, 1);
+    const overlayGeo = new THREE.PlaneGeometry(0.94, 0.94);
+    const { coverGeo, coverMats, veilGeo, veilMat, height } = this.fogParts;
+    this.tiles = [];
+    this.overlays = [];
+    this.fogCovers = [];
+    this.fogVeils = [];
+    for (let r = 0; r < ROWS; r += 1)
+      for (let c = 0; c < COLS; c += 1) {
+        const p = tileCenter(r, c);
+        const tile = new THREE.Mesh(tileGeo, (r + c) % 2 === 0 ? this.tileMats.light : this.tileMats.dark);
+        tile.position.set(p.x, 0, p.z);
+        tile.receiveShadow = true;
+        tile.userData = { r, c };
+        this.tiles.push(tile);
+        const overlay = new THREE.Mesh(overlayGeo, this.markMaterials.move);
+        overlay.rotation.x = -Math.PI / 2;
+        overlay.position.set(p.x, SURFACE + 0.004, p.z);
+        overlay.visible = false;
+        overlay.renderOrder = 2;
+        this.overlays.push(overlay);
+        const cover = new THREE.Mesh(coverGeo, coverMats);
+        cover.position.set(p.x, SURFACE + height / 2, p.z);
+        cover.receiveShadow = true;
+        cover.visible = false;
+        cover.userData = { r, c };
+        const veil = new THREE.Mesh(veilGeo, veilMat);
+        veil.rotation.x = -Math.PI / 2;
+        veil.position.set(p.x, SURFACE + 0.003, p.z);
+        veil.visible = false;
+        veil.renderOrder = 1;
+        this.fogCovers.push(cover);
+        this.fogVeils.push(veil);
+        grid.add(tile, overlay, cover, veil);
+      }
+    this.boardGroup.add(grid);
+    this.gridGroup = grid;
+    // 迷雾板也要能被点击拾取（点到迷雾里的格子时给出提示）。
+    this.pickTargets = [...this.tiles, ...this.fogCovers];
+  }
+
+  /** 换到行列数不同的棋盘时重建格子。 */
+  setGrid(rows, cols) {
+    if (rows === ROWS && cols === COLS) return;
+    ROWS = rows;
+    COLS = cols;
+    this.buildGrid();
   }
 
   /**
    * 迷雾层：未探索的格子盖一块带细斜线的灰白板，遮住上面的一切；
    * 探索过但当前看不见的格子铺一层半透明纸色薄纱。
    */
-  buildFog(board) {
+  buildFog() {
     const canvas = document.createElement("canvas");
     canvas.width = canvas.height = 128;
     const ctx = canvas.getContext("2d");
@@ -276,35 +386,15 @@ export class BoardWorld {
       toneMapped: false,
     });
     const veilGeo = new THREE.PlaneGeometry(1, 1);
-    this.fogCovers = [];
-    this.fogVeils = [];
-    for (let r = 0; r < SIZE; r += 1)
-      for (let c = 0; c < SIZE; c += 1) {
-        const p = tileCenter(r, c);
-        const cover = new THREE.Mesh(coverGeo, [coverSide, coverSide, coverTop, coverSide, coverSide, coverSide]);
-        cover.position.set(p.x, SURFACE + FOG_HEIGHT / 2, p.z);
-        cover.receiveShadow = true;
-        cover.visible = false;
-        cover.userData = { r, c };
-        const veil = new THREE.Mesh(veilGeo, veilMat);
-        veil.rotation.x = -Math.PI / 2;
-        veil.position.set(p.x, SURFACE + 0.003, p.z);
-        veil.visible = false;
-        veil.renderOrder = 1;
-        board.add(cover, veil);
-        this.fogCovers.push(cover);
-        this.fogVeils.push(veil);
-      }
-    // 迷雾板也要能被点击拾取（点到迷雾里的格子时给出提示）。
-    this.pickTargets = [...this.tiles, ...this.fogCovers];
+    this.fogParts = { coverGeo, coverMats: [coverSide, coverSide, coverTop, coverSide, coverSide, coverSide], veilGeo, veilMat, height: FOG_HEIGHT };
   }
 
   /** 按棋盘的可见性刷新迷雾与各物体的显隐。 */
   updateFog(board) {
     const fog = Boolean(board.fog);
     this.fogCovers.forEach((cover, i) => {
-      const r = Math.floor(i / SIZE);
-      const c = i % SIZE;
+      const r = Math.floor(i / COLS);
+      const c = i % COLS;
       cover.visible = fog && !isExplored(board, r, c);
       this.fogVeils[i].visible = fog && isExplored(board, r, c) && !isVisible(board, r, c);
     });
@@ -404,40 +494,55 @@ export class BoardWorld {
    * 格线落在整数坐标上，和棋盘的格子严丝合缝；center 是大厅中线的 x 坐标。
    */
   buildExtension(center) {
-    const UNITS = 40;
-    const PX = 40;
+    const PX = 32;
+    const halfW = (this.visibleCols ?? COLS) / 2;
+    const halfL = ROWS / 2;
+    const reach = 12;
+    const unitsX = 2 * Math.ceil(halfW + reach);
+    const unitsZ = 2 * Math.ceil(halfL + reach);
     const canvas = document.createElement("canvas");
-    canvas.width = canvas.height = UNITS * PX;
+    canvas.width = unitsX * PX;
+    canvas.height = unitsZ * PX;
     const ctx = canvas.getContext("2d");
     ctx.fillStyle = "#f4f3ef";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.strokeStyle = "#bdbcb6";
-    ctx.lineWidth = 1.6;
-    for (let i = 0; i <= UNITS; i += 1) {
-      ctx.beginPath();
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    for (let i = 0; i <= unitsX; i += 1) {
       ctx.moveTo(i * PX, 0);
       ctx.lineTo(i * PX, canvas.height);
+    }
+    for (let i = 0; i <= unitsZ; i += 1) {
       ctx.moveTo(0, i * PX);
       ctx.lineTo(canvas.width, i * PX);
-      ctx.stroke();
     }
-    // 从大厅中心往外淡出：大厅范围内不透明，之后逐渐透明。
-    const fade = ctx.createRadialGradient(canvas.width / 2, canvas.height / 2, 5 * PX, canvas.width / 2, canvas.height / 2, 19 * PX);
-    fade.addColorStop(0, "rgba(0, 0, 0, 1)");
-    fade.addColorStop(1, "rgba(0, 0, 0, 0)");
-    ctx.globalCompositeOperation = "destination-in";
-    ctx.fillStyle = fade;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.stroke();
+    // 按到大厅这块长方形的距离淡出：贴着大厅不透明，往外 reach 格内逐渐透明。
+    const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const data = image.data;
+    const ox = canvas.width / 2 + (center - Math.round(center)) * PX;
+    const oz = canvas.height / 2;
+    for (let y = 0; y < canvas.height; y += 1) {
+      const dz = Math.max(0, Math.abs(y - oz) / PX - halfL);
+      for (let x = 0; x < canvas.width; x += 1) {
+        const dx = Math.max(0, Math.abs(x - ox) / PX - halfW);
+        const d = Math.hypot(dx, dz) / reach;
+        const k = d >= 1 ? 0 : 1 - d * d * (3 - 2 * d);
+        data[(y * canvas.width + x) * 4 + 3] = Math.round(255 * k);
+      }
+    }
+    ctx.putImageData(image, 0, 0);
     const tex = new THREE.CanvasTexture(canvas);
     tex.colorSpace = THREE.SRGBColorSpace;
     tex.anisotropy = 4;
     const floor = new THREE.Mesh(
-      new THREE.PlaneGeometry(UNITS, UNITS),
+      new THREE.PlaneGeometry(unitsX, unitsZ),
       new THREE.MeshStandardMaterial({ map: tex, transparent: true, roughness: 0.9, metalness: 0, depthWrite: false }),
     );
     floor.rotation.x = -Math.PI / 2;
-    // 平面的中心要落在格线上（整数坐标），大厅中线在半格处时往旁边挪半格。
-    floor.position.set(Math.round(center), SURFACE - 0.002, 0);
+    // 平面的中心落在格线上（整数坐标）：大厅中线在半格处时，平面往旁边挪半格，淡出的中心仍对准大厅。
+    floor.position.set(Math.round(center), SURFACE - 0.002, ROWS % 2 ? 0.5 : 0);
     floor.receiveShadow = true;
     return floor;
   }
@@ -448,9 +553,10 @@ export class BoardWorld {
    *   cols：只显示前几列（其余列整列是墙，玩家走不到），底板和外框收窄到这几列，镜头对准它们的中线。
    */
   applyDisplay(display = {}) {
-    const cols = display.cols ?? SIZE;
+    const cols = display.cols ?? COLS;
     const plain = Boolean(display.plain);
-    const shift = -(SIZE - cols) / 2;
+    const shift = -(COLS - cols) / 2;
+    this.visibleCols = cols;
     for (const tile of this.tiles) {
       const { r, c } = tile.userData;
       tile.visible = c < cols;
@@ -487,11 +593,11 @@ export class BoardWorld {
       const left = tileCenter(0, 0).x - 0.5;
       const top = tileCenter(0, 0).z - 0.5;
       for (let c = 1; c < cols; c += 1) {
-        const line = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.006, SIZE), lineMat);
+        const line = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.006, ROWS), lineMat);
         line.position.set(left + c, SURFACE + 0.001, 0);
         grid.add(line);
       }
-      for (let r = 1; r < SIZE; r += 1) {
+      for (let r = 1; r < ROWS; r += 1) {
         const line = new THREE.Mesh(new THREE.BoxGeometry(cols, 0.006, 0.02), lineMat);
         line.position.set(left + cols / 2, SURFACE + 0.001, top + r);
         grid.add(line);
@@ -499,7 +605,6 @@ export class BoardWorld {
       this.boardGroup.add(grid);
       this.plainGrid = grid;
     }
-    this.visibleCols = cols;
     // 镜头对准显示出来的这几列的中线（resize 里按它重新算默认视角）。
     this.displayShift = shift;
     this.resize();
@@ -507,6 +612,16 @@ export class BoardWorld {
 
   loadLevel(board) {
     this.clearLevel();
+    this.setGrid(board.rows, board.cols);
+    // 上一章跟随时挪动过的灯光放回原位，镜头跟随从头算。
+    if (this.lightZ) {
+      const { lamp, glow } = this.lights;
+      for (const o of [lamp.position, lamp.target.position, glow.position, glow.target.position]) o.z -= this.lightZ;
+      lamp.target.updateMatrixWorld();
+      glow.target.updateMatrixWorld();
+      this.lightZ = 0;
+    }
+    this.followZ = null;
     this.applyDisplay(board.level.display);
     const rand = seeded(board.level.id * 97);
     board.tiles.forEach((row, r) =>
@@ -572,6 +687,21 @@ export class BoardWorld {
     }
     this.updateFog(board);
     this.resetView();
+    // 长棋盘：镜头直接落在主角附近；需要压暗的章节按主角的起点算好初始暗度。
+    this.board = board;
+    this.gloomFrom = board.hero.r;
+    this.follow(board.hero.r, 0);
+    this.updateGloom(0);
+  }
+
+  /** 按主角离首领的远近更新压暗程度：只在 level.gloom 的章节，起点为 0，走到首领跟前为 1。 */
+  updateGloom(duration = 700) {
+    const board = this.board;
+    const boss = board?.level.gloom && board.monsters.find((m) => m.def.boss);
+    if (!boss) return this.setGloom(0, duration);
+    const span = Math.max(1, this.gloomFrom - boss.r - 1);
+    const t = Math.min(1, Math.max(0, (this.gloomFrom - board.hero.r) / span));
+    return this.setGloom(t, duration);
   }
 
   updateMonster(m) {
@@ -603,8 +733,8 @@ export class BoardWorld {
   /** marks: Map<"r,c", 类型>；未列出的格子隐藏。 */
   setMarks(marks) {
     this.overlays.forEach((overlay, index) => {
-      const r = Math.floor(index / SIZE);
-      const c = index % SIZE;
+      const r = Math.floor(index / COLS);
+      const c = index % COLS;
       const type = marks.get(key(r, c));
       overlay.visible = Boolean(type);
       if (type) overlay.material = this.markMaterials[type];
@@ -698,6 +828,8 @@ export class BoardWorld {
   }
 
   moveHero(to) {
+    this.follow(to.r);
+    this.updateGloom();
     return this.hop(this.hero, tileCenter(to.r, to.c));
   }
 
@@ -795,8 +927,8 @@ export class BoardWorld {
 
   /** 墨迹退去：从离出口最远的一排开始，每一格冒出墨色碎块，一排排收向出口，最后出口处一片蓝色碎块。 */
   async recedeInk(exit) {
-    for (let r = SIZE - 1; r >= 0; r -= 1) {
-      for (let c = 0; c < (this.visibleCols ?? SIZE); c += 1) this.burst(tileCenter(r, c).setY(0.12), 2, this.inkMaterial, 0.25);
+    for (let r = ROWS - 1; r >= 0; r -= 1) {
+      for (let c = 0; c < (this.visibleCols ?? COLS); c += 1) this.burst(tileCenter(r, c).setY(0.12), 2, this.inkMaterial, 0.25);
       await new Promise((done) => setTimeout(done, 140));
     }
     if (exit) this.burst(tileCenter(exit.r, exit.c).setY(0.4), 30, this.sparkMaterial, 1.2);
@@ -811,7 +943,9 @@ export class BoardWorld {
     this.camera.position.copy(a.clone().add(new THREE.Vector3(0, 0.75, 1.9)));
     this.controls.target.copy(look);
     this.controls.update();
-    await this.moveCamera(b.clone().add(new THREE.Vector3(0, 1.3, 2.7)), look, 3600);
+    // 大厅越长推得越久：8 行的棋盘约 3.6 秒，16 行约 5.6 秒。
+    const length = Math.abs(from.r - to.r);
+    await this.moveCamera(b.clone().add(new THREE.Vector3(0, 1.3, 2.7)), look, 3600 + Math.max(0, length - 7) * 250);
     await new Promise((done) => setTimeout(done, 700));
     await this.resetView(1300);
   }
@@ -994,7 +1128,8 @@ export class BoardWorld {
     const dir = homeDirection(view);
     const dist = Math.max(view.minDistance, view.fitHalfWidth / Math.tan(hHalf));
     // 竖屏（手机）时镜头对准棋盘正中心，棋盘落在屏幕中央；上方信息栏和下方方向键各占一边，不会压住棋盘。
-    const target = new THREE.Vector3(this.displayShift ?? 0, 0, portrait ? 0 : 0.3);
+    // 长棋盘时镜头对准跟随的位置（follow），否则对准棋盘中心。
+    const target = new THREE.Vector3(this.displayShift ?? 0, 0, this.followZ ?? (portrait ? 0 : 0.3));
     this.homeView = { pos: target.clone().addScaledVector(dir.normalize(), dist), target };
     this.controls.maxDistance = Math.max(20, dist * 1.25);
     // 标题页只剩半屏给棋盘，镜头拉远一些让整张棋盘入镜。

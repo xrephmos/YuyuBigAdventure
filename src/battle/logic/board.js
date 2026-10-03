@@ -40,7 +40,9 @@ export function createBoard(
   // 新学会的技能（本章的优先）只放进空槽。
   fresh.sort((a, b) => (b === level.skill) - (a === level.skill));
   for (const id of fresh) if (skillPick.length < SKILL_SLOTS) skillPick.push(id);
-  const size = level.map.length;
+  // 棋盘不一定是正方形：终章的大厅比别的章节长一倍。
+  const rows = level.map.length;
+  const cols = level.map[0].replace(/\s+/g, "").length;
   const tiles = [];
   const items = new Map();
   const doors = new Set();
@@ -89,7 +91,8 @@ export function createBoard(
   });
   const state = {
     level,
-    size,
+    rows,
+    cols,
     tiles,
     items,
     doors,
@@ -154,8 +157,8 @@ export function updateVisibility(state) {
   if (!state.fog) return;
   const { radius } = state.fog;
   const visible = new Set();
-  for (let r = 0; r < state.size; r += 1)
-    for (let c = 0; c < state.size; c += 1) {
+  for (let r = 0; r < state.rows; r += 1)
+    for (let c = 0; c < state.cols; c += 1) {
       const dr = r - state.hero.r;
       const dc = c - state.hero.c;
       if (dr * dr + dc * dc > radius * radius) continue;
@@ -176,7 +179,7 @@ export function visibleMonsterAt(state, r, c) {
   return m && isVisible(state, r, c) ? m : null;
 }
 
-export const inside = (s, r, c) => r >= 0 && c >= 0 && r < s.size && c < s.size;
+export const inside = (s, r, c) => r >= 0 && c >= 0 && r < s.rows && c < s.cols;
 
 export function monsterAt(state, r, c) {
   return state.monsters.find((m) => m.alive && m.r === r && m.c === c) ?? null;
