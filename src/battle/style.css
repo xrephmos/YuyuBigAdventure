@@ -1525,6 +1525,71 @@ body:not(.in-level) .hint-bar {
   border-top: 8px solid var(--accent);
 }
 
+/* 首领的标题卡：盖住整张战斗卡的墨黑幕布，正中一行大字。不挡点击之外的东西，播完就隐藏。 */
+.stage-card {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: grid;
+  place-content: center;
+  gap: var(--sp-3);
+  padding: var(--sp-6);
+  text-align: center;
+  color: var(--paper);
+  background: rgba(var(--ink-rgb), 0.9);
+  animation: stage-in 0.45s var(--ease-entry);
+}
+
+.stage-card .t-meta {
+  color: rgba(var(--paper-rgb), 0.6);
+  letter-spacing: 0.3em;
+}
+
+.stage-card h2 {
+  margin: 0;
+  font-size: clamp(30px, 6vw, 56px);
+  font-weight: 200;
+  letter-spacing: 0.12em;
+  animation: stage-title 1.4s var(--ease-entry);
+}
+
+.stage-card.leaving {
+  animation: stage-out 0.38s ease-in forwards;
+}
+
+@keyframes stage-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes stage-title {
+  from {
+    opacity: 0;
+    letter-spacing: 0.5em;
+  }
+}
+
+@keyframes stage-out {
+  to {
+    opacity: 0;
+  }
+}
+
+/* 二阶段转场：整张卡片晃一下，顶边的蓝条换成墨黑。 */
+.battle-modal.rebirth .battle-card {
+  border-top-color: var(--ink);
+  animation: card-impact 0.5s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stage-card,
+  .stage-card h2,
+  .stage-card.leaving {
+    animation-duration: 0.01s;
+  }
+}
+
 .battle-head {
   display: grid;
   grid-template-columns: 1fr auto 1fr;

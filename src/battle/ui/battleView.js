@@ -8,7 +8,7 @@ import { patternListHtml } from "./monsterIntel.js";
 import { getHeroName } from "../data/heroName.js";
 import { ALL_FEATURES } from "../data/features.js";
 import { battleLayout, isTouch } from "./device.js";
-import { countHearts, reach, footprint } from "../logic/shapes.js";
+import { countHearts, reach, footprint, applyChanges, EMPTY } from "../logic/shapes.js";
 import {
   heroAttack,
   heroHeal,
@@ -143,6 +143,7 @@ export function runBattle({ root, combat, monster, world, sfx, heroFirst, featur
       <div class="battle-log" data-log aria-live="polite"></div>
       <div class="battle-toast" data-toast></div>
       <div class="battle-result" data-result hidden></div>
+      <div class="stage-card" data-stage-card hidden></div>
     </div>
   </div>`;
 
@@ -600,7 +601,15 @@ export function runBattle({ root, combat, monster, world, sfx, heroFirst, featur
     if (cracked) sfx.play("crack");
     floatText("enemy", `-${event.hits.length}`, heavy ? "dmg big" : "dmg");
     enemyView.shake(heavy);
-    await enemyView.animate(event.hits, "hit", combat.monsterMatrix, { heavy });
+    // 首领进入二阶段时，战斗状态里已经是新心阵：碎心动画先落在旧心阵上，新心阵留给转场演出。
+    const reborn = result.events.find((e) => e.type === "rebirth");
+    await enemyView.animate(event.hits, "hit", reborn ? applyChanges(enemyView.matrix, event.hits) : combat.monsterMatrix, { heavy });
+    if (reborn) {
+      await playRebirth(reborn);
+      busy = false;
+      render();
+      return;
+    }
     const comboEvent = result.events.find((e) => e.type === "combo");
     const links = comboEvent ? comboLinks(comboEvent.combo) : 0;
     if (links) {
@@ -677,6 +686,57 @@ export function runBattle({ root, combat, monster, world, sfx, heroFirst, featur
     await leaveHealMode();
     await delay(150);
     await enemyPhase();
+  }
+
+  /**
+   * 首领的标题卡：战斗卡上盖一层墨黑，正中一行大字，停留片刻后淡出。
+   */
+  async function stageCard(kicker, title, hold = 1300) {
+    const card = $("[data-stage-card]");
+    card.innerHTML = `<p class="t-meta">${kicker}</p><h2>${title}</h2>`;
+    card.hidden = false;
+    card.classList.remove("leaving");
+    await delay(hold);
+    card.classList.add("leaving");
+    await delay(380);
+    card.hidden = true;
+  }
+
+  /** 心阵从上到下一行行聚拢出来（开场和二阶段共用）。 */
+  async function assembleEnemy(matrix) {
+    syncSize();
+    enemyView.set(matrix.map((row) => row.map((v) => (v > EMPTY ? EMPTY : v))));
+    enemyView.relayout();
+    const cells = [];
+    matrix.forEach((row, r) => row.forEach((v, c) => v > EMPTY && cells.push({ r, c, before: EMPTY, after: v })));
+    await enemyView.animate(cells, "heal", matrix);
+  }
+
+  /** 暗王开场：标题卡，然后心阵聚拢。 */
+  async function playBossIntro() {
+    sfx.play("toll");
+    const shown = stageCard("Boss · 终章", `${def.name} · ${def.title}`, 1500);
+    await delay(700);
+    await assembleEnemy(combat.monsterMatrix);
+    await shown;
+  }
+
+  /**
+   * 二阶段转场：心阵清空后停一拍，钟声与低鸣，标题卡写出二阶段的名字，音乐换成第二段，
+   * 新形状的心阵从上到下重新聚拢；名牌下的小字也换成二阶段的名字。
+   */
+  async function playRebirth(event) {
+    await delay(550);
+    sfx.play("rebirth");
+    sfx.music.play("boss2");
+    modal.classList.add("rebirth");
+    enemyView.shake(true);
+    const shown = stageCard("Phase II · 第二阶段", event.title, 1400);
+    await delay(900);
+    $(".side.enemy .traits").textContent = event.title;
+    await assembleEnemy(combat.monsterMatrix);
+    await shown;
+    modal.classList.remove("rebirth");
   }
 
   /** 收起浮窗用的时长，与 phone.css 里 heal-close 动画一致。 */
@@ -872,7 +932,7 @@ export function runBattle({ root, combat, monster, world, sfx, heroFirst, featur
     const box = $("[data-result]");
     const outcome = combat.phase;
     const text = {
-      won: ["胜利", combat.stats.taken ? `${def.name}被击败。本场战斗损失 ${combat.stats.taken} 颗红心。` : `${def.name}被击败。${getHeroName()}未损失红心。`, "继续"],
+      won: [def.boss ? "将死" : "胜利", combat.stats.taken ? `${def.name}被击败。本场战斗损失 ${combat.stats.taken} 颗红心。` : `${def.name}被击败。${getHeroName()}未损失红心。`, "继续"],
       lost: ["战斗失败", `${getHeroName()}的红心已全部消除。`, "查看结果"],
       fled: ["撤退成功", `${def.name}晕眩两回合。`, "返回棋盘"],
     }[outcome];
@@ -1052,6 +1112,11 @@ export function runBattle({ root, combat, monster, world, sfx, heroFirst, featur
     render();
   }
   (async () => {
+    if (def.boss) {
+      busy = true;
+      render();
+      await playBossIntro();
+    }
     if (coach) {
       busy = true;
       render();

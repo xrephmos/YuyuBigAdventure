@@ -6,6 +6,37 @@
  */
 
 const midi = (n) => 440 * 2 ** ((n - 69) / 12);
+
+/** 颤音：一个低频振荡器推着音高上下摆 depth 音分，开头 0.25 秒内慢慢加深，像演奏者揉弦。 */
+function addVibrato(ctx, osc, start, duration, depth, rate = 5.2) {
+  const lfo = ctx.createOscillator();
+  lfo.frequency.value = rate;
+  const amount = ctx.createGain();
+  amount.gain.setValueAtTime(0, start);
+  amount.gain.linearRampToValueAtTime(depth, start + Math.min(0.25, duration * 0.5));
+  lfo.connect(amount).connect(osc.detune);
+  lfo.start(start);
+  lfo.stop(start + duration + 0.05);
+}
+
+/** 大厅的脉冲响应：立体声噪声按指数衰减，高频比低频衰减得快（一阶低通的系数随时间变大）。 */
+function hallImpulse(ctx, seconds) {
+  const rate = ctx.sampleRate;
+  const length = Math.floor(rate * seconds);
+  const buffer = ctx.createBuffer(2, length, rate);
+  const predelay = Math.floor(rate * 0.025);
+  for (let ch = 0; ch < 2; ch += 1) {
+    const data = buffer.getChannelData(ch);
+    let lp = 0;
+    for (let i = predelay; i < length; i += 1) {
+      const t = (i - predelay) / rate;
+      const k = Math.min(0.92, 0.25 + t * 0.35);
+      lp = lp * k + (Math.random() * 2 - 1) * (1 - k);
+      data[i] = lp * Math.exp((-6.9 * t) / seconds) * 1.6;
+    }
+  }
+  return buffer;
+}
 const jitter = (amount = 0.03) => 1 + (Math.random() * 2 - 1) * amount;
 
 /** 和弦：根音 MIDI 号 + 音程。 */
@@ -14,7 +45,6 @@ const MAJ = [0, 4, 7];
 const MIN = [0, 3, 7];
 const MAJ7 = [0, 4, 7, 11];
 const MIN7 = [0, 3, 7, 10];
-const DOM7B9 = [0, 4, 7, 10, 13];
 
 export class Sfx {
   constructor() {
@@ -66,6 +96,16 @@ export class Sfx {
     soften.connect(delay);
     delay.connect(damp).connect(feedback).connect(delay);
     damp.connect(wet).connect(this.master);
+    // 大厅混响：算法生成的脉冲响应（衰减的立体声噪声，越往后越暗），不用下载录音。
+    // 每首曲子按自己的 reverb 值把声音送进来；开关跟随音乐总线。
+    this.hallIn = ctx.createGain();
+    this.hallIn.gain.value = this.musicEnabled ? 0.55 : 0;
+    const hall = ctx.createConvolver();
+    hall.buffer = hallImpulse(ctx, 3.4);
+    const hallTone = ctx.createBiquadFilter();
+    hallTone.type = "lowpass";
+    hallTone.frequency.value = 4200;
+    this.hallIn.connect(hall).connect(hallTone).connect(this.master);
     this.noiseBuffer = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
     const data = this.noiseBuffer.getChannelData(0);
     for (let i = 0; i < data.length; i += 1) data[i] = Math.random() * 2 - 1;
@@ -81,12 +121,17 @@ export class Sfx {
     this.musicEnabled = on;
     if (on) this.unlock();
     if (this.musicBus) this.musicBus.gain.setTargetAtTime(on ? 0.55 : 0, this.context.currentTime, 0.2);
+    if (this.hallIn) this.hallIn.gain.setTargetAtTime(on ? 0.55 : 0, this.context.currentTime, 0.2);
   }
 
   // ——— 基础音色 ———
 
   /** 一个振荡器音符。bus 默认走音效总线；音乐的音符传入 musicBus。 */
-  tone(freq, duration = 0.18, { delay = 0, at = null, volume = 0.05, type = "sine", slide = 0, attack = 0.008, bus = null, filter = 0, detune = 0 } = {}) {
+  tone(
+    freq,
+    duration = 0.18,
+    { delay = 0, at = null, volume = 0.05, type = "sine", slide = 0, attack = 0.008, bus = null, filter = 0, detune = 0, vibrato = 0 } = {},
+  ) {
     const ctx = this.context;
     if (!ctx) return;
     const out = bus ?? this.sfxBus;
@@ -100,6 +145,7 @@ export class Sfx {
     osc.detune.value = detune;
     osc.frequency.setValueAtTime(freq, start);
     if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), start + duration);
+    if (vibrato) addVibrato(ctx, osc, start, duration, vibrato);
     gain.gain.setValueAtTime(0, start);
     gain.gain.linearRampToValueAtTime(volume, start + attack);
     gain.gain.exponentialRampToValueAtTime(0.0005, start + duration);
@@ -111,6 +157,40 @@ export class Sfx {
       node = osc.connect(lp);
     }
     node.connect(gain).connect(out);
+    osc.start(start);
+    osc.stop(start + duration + 0.05);
+  }
+
+  /**
+   * 人声“啊”：锯齿波带颤音，经过三个并联的带通滤波器（元音 a 的三个共振峰），像远处合唱里的一个声部。
+   * female：用女声的共振峰位置，颤音稍快稍深。
+   */
+  voice(freq, duration, { at = null, volume = 0.01, attack = 0.3, bus = null, detune = 0, female = false } = {}) {
+    const ctx = this.context;
+    if (!ctx || !bus) return;
+    const start = at ?? ctx.currentTime;
+    const osc = ctx.createOscillator();
+    osc.type = "sawtooth";
+    osc.frequency.value = freq;
+    osc.detune.value = detune;
+    addVibrato(ctx, osc, start, duration, female ? 18 : 14, (female ? 5.3 : 4.6) + Math.random() * 0.8);
+    const gain = ctx.createGain();
+    gain.gain.value = 0;
+    gain.gain.setValueAtTime(0, start);
+    gain.gain.linearRampToValueAtTime(volume, start + attack);
+    gain.gain.setValueAtTime(volume, start + Math.max(attack, duration * 0.7));
+    gain.gain.exponentialRampToValueAtTime(0.0005, start + duration);
+    const formants = female ? [[880, 7, 1], [1240, 9, 0.55], [2850, 12, 0.22]] : [[730, 6, 1], [1090, 8, 0.5], [2440, 10, 0.18]];
+    for (const [f, q, g] of formants) {
+      const bp = ctx.createBiquadFilter();
+      bp.type = "bandpass";
+      bp.frequency.value = f;
+      bp.Q.value = q;
+      const level = ctx.createGain();
+      level.gain.value = g * 3;
+      osc.connect(bp).connect(level).connect(gain);
+    }
+    gain.connect(bus);
     osc.start(start);
     osc.stop(start + duration + 0.05);
   }
@@ -135,6 +215,15 @@ export class Sfx {
     gain.gain.exponentialRampToValueAtTime(0.0005, start + duration);
     src.connect(bq).connect(gain).connect(bus ?? this.sfxBus);
     src.start(start, Math.random() * 1.5, duration + 0.05);
+  }
+
+  /** 大钟：和音乐里的 toll 同一组分音，走音效总线。 */
+  bellToll(base, duration, volume) {
+    [0.5, 1, 1.183, 1.506, 2, 2.514, 3.011].forEach((ratio, i) => {
+      const v = volume * [0.7, 1, 0.5, 0.35, 0.45, 0.2, 0.12][i];
+      this.tone(base * ratio, duration / (1 + i * 0.45), { volume: v, type: "sine", attack: 0.003 });
+      if (i < 3) this.tone(base * ratio * 1.0035, duration / (1 + i * 0.45), { volume: v * 0.5, type: "sine", attack: 0.003 });
+    });
   }
 
   /** 金属声：几组不成整数倍的分音一起衰减（盾、铁砧、护甲）。 */
@@ -309,6 +398,17 @@ export class Sfx {
         [0, 6, 11].forEach((iv) => this.tone(midi(50 + iv), 0.7, { volume: 0.03, type: "square", filter: 1400, slide: -30 }));
         this.noise(0.3, { volume: 0.04, filter: 400 });
         break;
+      case "toll":
+        // 首领开场：一声低沉的大钟。
+        this.bellToll(98, 4.5, 0.06);
+        break;
+      case "rebirth":
+        // 二阶段：一声大钟，底下一股低鸣慢慢涌上来，再叠一片小调的和声。
+        this.bellToll(73.4, 5, 0.07);
+        this.tone(41, 2.6, { type: "sawtooth", volume: 0.05, attack: 0.9, filter: 300, slide: 8 });
+        this.noise(1.6, { volume: 0.05, filter: 200, sweep: 3200, type: "bandpass", q: 2, attack: 1.3 });
+        chord(50, [0, 3, 7, 13]).forEach((n) => this.tone(midi(n), 2.4, { delay: 0.6, volume: 0.02, type: "sawtooth", attack: 0.8, filter: 1200, detune: Math.random() * 14 - 7 }));
+        break;
       case "victory":
         [523, 659, 784, 1046].forEach((f, i) => this.tone(f, 0.45, { delay: i * 0.1, type: "triangle", volume: 0.05 }));
         chord(72, MAJ).forEach((n) => this.tone(midi(n), 0.9, { delay: 0.4, volume: 0.025, type: "sine" }));
@@ -339,6 +439,9 @@ export class Sfx {
 
 /** 乐器。t 为开始时间（音频时钟），bus 为这首曲子自己的增益节点。 */
 export function instruments(sfx, bus) {
+  // 人性化：管弦乐音色的每个音提前或拖后几毫秒、轻重各不相同，听起来不像机器卡着拍子。
+  const hum = (t) => t + (Math.random() - 0.4) * 0.014;
+  const vel = (v) => v * (0.85 + Math.random() * 0.27);
   return {
     bass: (n, t, len, vol = 0.08) => {
       sfx.tone(midi(n), len, { at: t, volume: vol, type: "triangle", bus, attack: 0.01, filter: 700 });
@@ -364,6 +467,83 @@ export function instruments(sfx, bus) {
     },
     // 镲用带通噪声，只留 6 kHz 左右的“嚓”，不要最顶上的刺声。
     hat: (t, vol = 0.014) => sfx.noise(0.035, { at: t, volume: vol, filter: 6000, type: "bandpass", q: 0.9, bus }),
+    // ——— 暗王终章用的音色 ———
+    // 教堂大钟：一组不成整数倍的分音（低八度的嗡音、小三度、五度……），越高的分音衰减越快，两两略微失谐产生拍音。
+    toll: (n, t, vol = 0.03, len = 6) => {
+      [0.5, 1, 1.183, 1.506, 2, 2.514, 3.011].forEach((ratio, i) => {
+        const f = midi(n) * ratio;
+        const v = vol * [0.7, 1, 0.5, 0.35, 0.45, 0.2, 0.12][i];
+        sfx.tone(f, len / (1 + i * 0.45), { at: t, volume: v, type: "sine", bus, attack: 0.003 });
+        if (i < 3) sfx.tone(f * 1.0035, len / (1 + i * 0.45), { at: t, volume: v * 0.5, type: "sine", bus, attack: 0.003 });
+      });
+      // 钟锤敲上去的那一下金属声。
+      sfx.noise(0.06, { at: t, volume: vol * 0.5, filter: 2400, type: "bandpass", q: 3, bus });
+    },
+    // 定音鼓：带一点音高下滑的低沉鼓声，外加一下闷的敲击噪声。
+    timpani: (n, t, vol = 0.12) => {
+      const at = hum(t);
+      const v = vel(vol);
+      sfx.tone(midi(n), 1.6, { at, volume: v, type: "sine", bus, attack: 0.004, slide: -midi(n) * 0.03 });
+      sfx.tone(midi(n) * 1.504, 0.7, { at, volume: v * 0.3, type: "sine", bus, attack: 0.004 });
+      sfx.tone(midi(n) * 1.742, 0.4, { at, volume: v * 0.15, type: "sine", bus, attack: 0.004 });
+      sfx.noise(0.09, { at, volume: v * 0.4, filter: 380, bus });
+    },
+    // 合唱垫音：几层略微失谐的三角波，起音很慢，像远处的人声“啊——”。
+    choir: (notes, t, len, vol = 0.008) =>
+      notes.forEach((n) =>
+        [-11, 0, 11].forEach((d) => sfx.voice(midi(n), len, { at: hum(t), volume: vel(vol), attack: Math.min(len * 0.4, len < 1 ? 0.05 : 2), bus, detune: d })),
+      ),
+    // 低音弦乐：两把失谐的锯齿波压暗，短促有力，用来跑八分 / 十六分的固定音型。
+    strings: (n, t, len, vol = 0.03) => {
+      const at = hum(t);
+      const v = vel(vol);
+      [-8, 8].forEach((d) =>
+        sfx.tone(midi(n), len, { at, volume: v, type: "sawtooth", bus, attack: 0.018, filter: 900, detune: d, vibrato: len > 0.4 ? 9 : 0 }),
+      );
+    },
+    // 女声合唱：每个音三个声部略微失谐，起音慢，用女声的“啊”。
+    soprano: (notes, t, len, vol = 0.009) =>
+      notes.forEach((n) =>
+        [-8, 0, 8].forEach((d) => sfx.voice(midi(n), len, { at: hum(t), volume: vel(vol), attack: Math.min(len * 0.35, 0.6), bus, detune: d, female: true })),
+      ),
+    // 小号：两把略微失谐的锯齿波，比圆号亮、起音更快，长音带颤音。
+    trumpet: (n, t, len, vol = 0.012) => {
+      const at = hum(t);
+      const v = vel(vol);
+      [-4, 4].forEach((d) => sfx.tone(midi(n), len, { at, volume: v, type: "sawtooth", bus, attack: 0.03, filter: 1900, detune: d, vibrato: len > 0.3 ? 8 : 0 }));
+    },
+    // 铜管和弦刺：几支圆号同时短促地吹一下。
+    brass: (notes, t, len, vol = 0.012) =>
+      notes.forEach((n) => {
+        const at = hum(t);
+        const v = vel(vol);
+        [-6, 6].forEach((d) => sfx.tone(midi(n), len, { at, volume: v, type: "sawtooth", bus, attack: 0.02, filter: 1300, detune: d }));
+      }),
+    // 弦乐长和弦：一整个弦乐声部持续拉住，带颤音，代替管风琴的方波。
+    section: (notes, t, len, vol = 0.007) =>
+      notes.forEach((n) =>
+        [-10, 0, 10].forEach((d) =>
+          sfx.tone(midi(n), len, { at: hum(t), volume: vel(vol), type: "sawtooth", bus, attack: 0.25, filter: 1400, detune: d, vibrato: 10 }),
+        ),
+      ),
+    // 大鼓（太鼓）：比定音鼓更低、没有明确音高的一下闷响，代替电子鼓式的底鼓。
+    taiko: (t, vol = 0.14) => {
+      const at = hum(t);
+      const v = vel(vol);
+      sfx.tone(72, 0.7, { at, volume: v, type: "sine", bus, attack: 0.004, slide: -24 });
+      sfx.tone(118, 0.25, { at, volume: v * 0.35, type: "sine", bus, attack: 0.004, slide: -40 });
+      sfx.noise(0.18, { at, volume: v * 0.5, filter: 260, bus });
+    },
+    // 上扬：一段噪声的滤波频率从低往高扫，越来越响，用来把气氛推进下一段。
+    riser: (t, len, vol = 0.02) => sfx.noise(len, { at: t, volume: vol, filter: 300, sweep: 5000, type: "bandpass", q: 2.5, bus, attack: len * 0.9 }),
+    // 镲：一片宽频噪声慢慢散开，压掉最刺的高频。
+    crash: (t, vol = 0.02) => sfx.noise(1.8, { at: t, volume: vol, filter: 4200, type: "bandpass", q: 0.6, bus, attack: 0.004 }),
+    // 铜管长音：锯齿波起音稍慢，压在中低频，像圆号。
+    horn: (n, t, len, vol = 0.016) => {
+      const at = hum(t);
+      const v = vel(vol);
+      [-5, 5].forEach((d) => sfx.tone(midi(n), len, { at, volume: v, type: "sawtooth", bus, attack: 0.07, filter: 1000, detune: d, vibrato: len > 0.35 ? 7 : 0 }));
+    },
   };
 }
 
@@ -431,20 +611,94 @@ export const TRACKS = {
       if (bar % 2 === 1 && s % 4 === 0) ins.lead(c[s % 3] + 12, t, beat * 0.9, 0.018);
     },
   },
-  // 暗王：管风琴和弦 + 三全音低音脉冲，C 小调，最后一小节是属九。
-  boss: {
-    bpm: 150,
-    chords: [chord(48, MIN), chord(44, MAJ), chord(41, MIN), chord(43, DOM7B9)],
+  // 王座厅（终章的棋盘）：D 弗里几亚调式，管风琴持续 D + A，远处的合唱缓缓起落，每小节第 1、3 拍一声大钟，不用鼓。
+  throne: {
+    bpm: 56,
+    reverb: 1,
+    chords: [chord(50, MIN), chord(51, MAJ), chord(43, MIN), chord(50, MIN)],
     step(ins, s, bar, t, beat, c) {
-      if (s === 0) ins.organ(c.map((n) => n + 12), t, beat * 3.8, 0.013);
-      if (s === 8) ins.organ(c.map((n) => n + 12), t, beat * 1.8, 0.01);
-      const bassNote = s % 8 === 6 ? c[0] - 6 : c[0] - 12;
-      if (s % 2 === 0) ins.bass(bassNote, t, beat * 0.4, 0.07);
-      if ([0, 3, 8, 11, 14].includes(s)) ins.kick(t, 0.18);
-      if (s === 4 || s === 12) ins.snare(t, 0.07);
-      if (s % 2 === 1) ins.hat(t, 0.016);
-      if (bar >= 2 && [0, 2, 4].includes(s)) ins.lead(c[s / 2] + 12, t, beat * 0.45, 0.02);
-      if (bar === 3 && s === 14) ins.pad([c[0] + 24, c[0] + 30], t, beat * 1.5, 0.012, 2000);
+      if (s === 0) ins.pad([38, 45], t, beat * 4.2, 0.011, 520);
+      if (s === 0) ins.choir(c.map((n) => n + 12), t, beat * 4, 0.006);
+      if (s === 0) ins.toll(50, t, 0.03);
+      if (s === 8) ins.toll(bar === 1 ? 51 : 45, t, 0.018, 4);
+      if (bar === 3 && s === 12) ins.bell(74, t, 0.01);
+    },
+  },
+  // 暗王战（第一段）：慢而重的半速感，Dm – E♭ – Gm – A。定音鼓落在小节头，低音弦乐跑八分音符，小节头一声大钟。
+  boss: {
+    bpm: 72,
+    reverb: 0.6,
+    chords: [chord(50, MIN), chord(51, MAJ), chord(43, MIN), chord(45, MAJ)],
+    ostinato: [0, 0, 12, 0, 7, 0, 12, 10],
+    step(ins, s, bar, t, beat, c) {
+      if (s === 0) {
+        ins.timpani(36 + (c[0] % 12), t, 0.13);
+        if (bar % 2 === 0) ins.toll(c[0], t, 0.02, 5);
+        ins.section(c.map((n) => n + 12), t, beat * 3.9, 0.006);
+        ins.choir(c.map((n) => n + 12), t, beat * 4, 0.007);
+      }
+      if (s % 2 === 0) ins.strings(c[0] - 12 + this.ostinato[s / 2], t, beat * 0.42, 0.026);
+      if (s === 8) ins.timpani(43 + (c[0] % 12), t, 0.07);
+      if (bar === 3 && (s === 12 || s === 14)) ins.timpani(45, t, 0.06 + (s - 12) * 0.02);
+      if (bar % 2 === 1 && (s === 0 || s === 8)) ins.horn(c[2] + (s === 8 ? 12 : 0), t, beat * 1.9, 0.014);
+    },
+  },
+  // 暗王战（第二段，王冠倾斜）：116 拍/分，Dm – B♭ – Gm – A7♭9，最后一小节的降九音把紧张推到顶，再落回开头。
+  // 底下是急促的：3 + 3 + 2 的切分重音（弦乐、定音鼓、合唱短喝）、四拍一下的太鼓、最后一小节的连击与上扬。
+  // 上面是庄严的：女声合唱每小节两个长音“啊——”，铜管以二分音符吹众赞歌式的和弦，每小节一声大钟。
+  boss2: {
+    bpm: 116,
+    reverb: 0.6,
+    chords: [chord(50, MIN), chord(46, MAJ), chord(43, MIN), chord(45, [0, 4, 7, 10, 13])],
+    accents: new Set([0, 3, 6, 8, 11, 14]),
+    // 女声合唱的两个声部，每小节两个二分音符：[上声部, 下声部]。
+    choirLine: [
+      [[81, 77], [77, 74]],
+      [[77, 74], [74, 70]],
+      [[79, 74], [82, 79]],
+      [[81, 76], [79, 73]],
+    ],
+    melody: [
+      [74, null, 74, 77, 76, null, 74, null],
+      [74, null, 74, 77, 79, null, 77, null],
+      [79, null, 79, 82, 81, null, 79, null],
+      [81, 82, 81, 79, 77, 76, 73, null],
+    ],
+    step(ins, s, bar, t, beat, c) {
+      const root = c[0];
+      const hit = this.accents.has(s);
+      // 低音弦乐：每个十六分音符都拉，重音处跳上八度；每拍最后一个音用小二度往上顶。
+      const note = hit ? root : s % 4 === 3 ? root - 11 : root - 12;
+      ins.strings(note, t, beat * 0.2, hit ? 0.03 : 0.016);
+      if (s % 4 === 0) ins.taiko(t, s === 0 ? 0.16 : 0.11);
+      if (hit) ins.timpani(36 + (root % 12) + (s === 8 ? 7 : 0), t, s === 0 ? 0.15 : 0.09);
+      if (s === 4 || s === 12) ins.snare(t, 0.045);
+      if (s === 0) {
+        if (bar === 0) ins.crash(t, 0.02);
+        ins.toll(root, t, 0.018, 3.5);
+        ins.section(c.slice(0, 3).map((n) => n + 12), t, beat * 3.9, 0.005);
+      }
+      // 庄严的一层：女声长音与铜管众赞歌，各占半小节。
+      if (s === 0 || s === 8) {
+        ins.soprano(this.choirLine[bar][s / 8], t, beat * 2.05, 0.01);
+        ins.brass(c.slice(0, 3).map((n) => n), t, beat * 1.9, 0.007);
+      }
+      // 合唱短促的“哈！”：只在两个最重的重音上。
+      if (s === 0 || s === 8) ins.choir([c[0] + 12, c[2] + 12], t, beat * 0.55, 0.008);
+      // 铜管和弦刺：跟着切分重音。
+      if (s === 3 || s === 11) ins.brass(c.slice(0, 3).map((n) => n + 12), t, beat * 0.25, 0.01);
+      const m = s % 2 === 0 ? this.melody[bar][s / 2] : null;
+      if (m) {
+        const held = this.melody[bar][s / 2 + 1] === null ? beat * 0.9 : beat * 0.42;
+        ins.horn(m - 12, t, held, 0.016);
+        ins.trumpet(m, t, held * 0.9, 0.01);
+      }
+      // 最后一小节：后半段定音鼓十六分连击、军鼓滚奏，噪声从低往高扫上去，接回开头。
+      if (bar === 3 && s >= 8) {
+        ins.timpani(45, t, 0.05 + (s - 8) * 0.012);
+        [0, 0.5].forEach((k) => ins.snare(t + k * (beat / 8), 0.014 + (s - 8) * 0.005));
+        if (s === 8) ins.riser(t, beat * 2, 0.016);
+      }
     },
   },
 };
@@ -486,6 +740,12 @@ class Music {
     gain.gain.setTargetAtTime(1, ctx.currentTime + 0.1, 0.5);
     gain.connect(this.sfx.musicBus);
     const track = TRACKS[this.want];
+    // 送进大厅混响的量由曲子自己决定：肃穆的曲子混响多，轻快的曲子不加。
+    if (track.reverb) {
+      const send = ctx.createGain();
+      send.gain.value = track.reverb;
+      gain.connect(send).connect(this.sfx.hallIn);
+    }
     this.current = { name: this.want, track, gain, ins: instruments(this.sfx, gain), step: 0, next: ctx.currentTime + 0.12 };
     if (!this.timer) this.timer = setInterval(() => this.tick(), 40);
   }

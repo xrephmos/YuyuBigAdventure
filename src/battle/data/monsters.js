@@ -209,7 +209,8 @@ export const MONSTERS = {
     title: "墨迹的源头",
     model: "king",
     boss: true,
-    ranks: { 2: ["A#.#.#A", "#######", "##A.A##", ".#####.", "##A.A##", "#######", "A#.#.#A"] },
+    // 一阶段 6 行：有了二阶段之后，整场仗的长度由两段心阵分摊（见 tools/boss-sim.mjs）。
+    ranks: { 2: ["A#.#.#A", "#######", "##A.A##", ".#####.", "#######", "A#.#.#A"] },
     moves: "king",
     aim: 1,
     // 王座崩落和王之审判紧挨着：防御只能挡住一招，另一招得靠定身钉或者硬扛。
@@ -222,6 +223,20 @@ export const MONSTERS = {
       // 回 3 颗：暗王战本来就长（心阵大、带护甲），回血再多就成了单纯的消耗战。
       { kind: "heal", name: "吞墨", amount: 3 },
     ],
+    // 二阶段：心阵第一次清空时暗王不倒下，王冠倾斜，墨迹聚成另一种形状重新补满；
+    // 招式也换一套：不再回血，出手更重，「崩冠」之前先蓄力，可以防御或用重武器打断。
+    rebirth: {
+      title: "王冠倾斜",
+      matrix: ["#..#..#", "##.#.##", "#######", "#A###A#", "#######", ".#####."],
+      pattern: [
+        atk("墨潮", ["#####"]),
+        atk("倾覆", ["###", "###"]),
+        { kind: "charge", name: "王冠倾斜" },
+        atk("崩冠", ["#.#.#", "#####", "#.#.#"]),
+        { kind: "curse", name: "将军！", amount: 2 },
+        atk("十字刑", [".#.", "###", ".#."]),
+      ],
+    },
   },
 };
 
@@ -256,6 +271,7 @@ for (const monster of Object.values(MONSTERS)) {
   monster.matrix = asVariants(Object.values(monster.ranks)[0])[0];
   monster.matrixValues = heartsAt(monster, 0);
   monster.armored = Object.values(monster.ranks).some((entry) => asVariants(entry).some((art) => art.some((row) => row.includes("A"))));
+  if (monster.rebirth) monster.rebirth.matrixValues = parseMatrix(monster.rebirth.matrix);
 }
 
 /** 招式效果的短描述（不含招式名）。 */

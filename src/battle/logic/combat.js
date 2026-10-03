@@ -126,8 +126,12 @@ export function createCombat({
   return state;
 }
 
+/** 怪物当前的招式循环：首领进入二阶段后换成新的一套。 */
+export const patternOf = (state) => state.pattern ?? state.def.pattern;
+
 export function planIntent(state) {
-  const { pattern, aim } = state.def;
+  const { aim } = state.def;
+  const pattern = patternOf(state);
   state.intent = pattern[state.step % pattern.length];
   state.aim = null;
   state.healPlan = state.intent.kind === "heal" ? healRegion(state.monsterMatrix, state.intent.amount, state.rng) : null;
@@ -175,7 +179,7 @@ export const slotPierce = (state, slot) =>
 
 /** 怪物蓄力之后的那一招重击，可以被重武器打断。 */
 export function interruptible(state) {
-  const p = state.def.pattern;
+  const p = patternOf(state);
   const prev = p[(state.step - 1 + p.length) % p.length];
   return state.phase === "hero" && state.intent?.kind === "attack" && prev?.kind === "charge";
 }
@@ -417,7 +421,9 @@ export function heroAttack(state, weaponId, r, c) {
   // 还没学到连击（序章只有短剑）时不计连击。
   const chase = state.features.has("combo") ? settleCombo(state, slot, outcome, wasBonus, events) : false;
 
-  if (isDead(state.monsterMatrix)) {
+  if (isDead(state.monsterMatrix) && state.def.rebirth && !state.reborn) {
+    rebirth(state, events);
+  } else if (isDead(state.monsterMatrix)) {
     state.phase = "won";
     state.log.push(`${state.def.name}被击败。`);
     events.push({ type: "won" });
@@ -434,6 +440,31 @@ export function heroAttack(state, weaponId, r, c) {
     events.push({ type: "bonus", reason: "swift" });
   } else state.phase = "monster";
   return { ok: true, events };
+}
+
+/**
+ * 首领的二阶段：心阵第一次清空时不倒下，换成另一种形状的心阵重新补满，招式循环换成新的一套，从头开始。
+ * 连击、追击、定身、打断都清零；主角的武器冷却也一并清空，喘一口气，仍由主角先出手。
+ */
+function rebirth(state, events) {
+  const next = state.def.rebirth;
+  state.reborn = true;
+  state.monsterMatrix = cloneMatrix(next.matrixValues);
+  state.doomed = [];
+  state.pattern = next.pattern;
+  state.step = 0;
+  // 连击清零即可：上一击的范围留着给界面播打击闪光，连击数为 0 时它不会被当成“连上”。
+  state.combo = 0;
+  state.lastWeaponId = null;
+  state.bonus = false;
+  state.bonusReason = null;
+  state.stunned = false;
+  state.interrupted = false;
+  for (const slot of state.weapons) if (slot.kind === "weapon") slot.cd = 0;
+  state.phase = "hero";
+  state.log.push(`${state.def.name}的王冠倾斜了，墨迹重新聚拢。`);
+  events.push({ type: "rebirth", title: next.title });
+  planIntent(state);
 }
 
 /** 某项机制还没解锁时给出的拒绝结果；解锁了返回 null。 */

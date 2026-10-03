@@ -196,7 +196,7 @@ sfx.musicEnabled = progress.audio?.music !== false;
 
 /** 每个场景对应一首背景音乐。 */
 const BATTLE_TRACK = { ink: "battle", pawn: "battle", knight: "elite", bishop: "elite", rook: "elite", queen: "elite", king: "boss" };
-const boardTrack = () => (board?.level.fog ? "fog" : "board");
+const boardTrack = () => (board?.level.goal === "boss" ? "throne" : board?.level.fog ? "fog" : "board");
 const explain = createCoach({
   root: $("#coach-root"),
   enabled: () => progress.hints !== false,

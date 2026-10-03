@@ -211,6 +211,7 @@ export class MatrixView {
    * foe：怪物打在主角身上，闪成红色。
    */
   strike(cells, { heavy = false, foe = false } = {}) {
+    if (!cells?.length) return;
     for (const [r, c] of cells) {
       const cell = this.cells.get(`${r},${c}`);
       if (!cell) continue;

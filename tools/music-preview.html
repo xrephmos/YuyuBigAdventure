@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>曲目试听</title>
+    <style>
+      :root {
+        --ink: #111;
+        --paper: #fafaf7;
+        --accent: #002fa7;
+        --line: #ddd;
+      }
+      body {
+        margin: 0;
+        padding: 32px 16px;
+        font: 15px/1.6 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+        color: var(--ink);
+        background: var(--paper);
+      }
+      main {
+        max-width: 560px;
+        margin: 0 auto;
+      }
+      h1 {
+        margin: 0 0 4px;
+        font-weight: 300;
+        font-size: 30px;
+      }
+      p.hint {
+        margin: 0 0 24px;
+        color: #666;
+      }
+      button {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        width: 100%;
+        margin: 0 0 10px;
+        padding: 14px 16px;
+        font: inherit;
+        text-align: left;
+        color: var(--ink);
+        background: #fff;
+        border: 1px solid var(--ink);
+        cursor: pointer;
+      }
+      button small {
+        grid-column: 1 / -1;
+        color: #666;
+      }
+      button.on {
+        color: #fff;
+        background: var(--accent);
+        border-color: var(--accent);
+      }
+      button.on small {
+        color: #dfe6ff;
+      }
+      .stop {
+        display: block;
+        text-align: center;
+        border-style: dashed;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>暗王终章 · 曲目试听</h1>
+      <p class="hint">点一首开始播放，再点另一首会交叉淡入。每首是 4 小节循环。</p>
+      <div id="list"></div>
+      <button class="stop" data-track="">停止</button>
+    </main>
+    <script type="module">
+      import { Sfx, TRACKS } from "../src/battle/audio.js";
+
+      // 现在线上的 Boss 曲，留在这里对比：管风琴 + 三全音低音脉冲，C 小调，150 拍/分。
+      TRACKS.bossOld = {
+        bpm: 150,
+        chords: [
+          [48, 51, 55],
+          [44, 48, 51],
+          [41, 44, 48],
+          [43, 47, 50, 53, 56],
+        ],
+        step(ins, s, bar, t, beat, c) {
+          if (s === 0) ins.organ(c.map((n) => n + 12), t, beat * 3.8, 0.013);
+          if (s === 8) ins.organ(c.map((n) => n + 12), t, beat * 1.8, 0.01);
+          const bassNote = s % 8 === 6 ? c[0] - 6 : c[0] - 12;
+          if (s % 2 === 0) ins.bass(bassNote, t, beat * 0.4, 0.07);
+          if ([0, 3, 8, 11, 14].includes(s)) ins.kick(t, 0.18);
+          if (s === 4 || s === 12) ins.snare(t, 0.07);
+          if (s % 2 === 1) ins.hat(t, 0.016);
+          if (bar >= 2 && [0, 2, 4].includes(s)) ins.lead(c[s / 2] + 12, t, beat * 0.45, 0.02);
+          if (bar === 3 && s === 14) ins.pad([c[0] + 24, c[0] + 30], t, beat * 1.5, 0.012, 2000);
+        },
+      };
+
+      const items = [
+        ["throne", "王座厅", "终章棋盘上的探索曲。56 拍/分，管风琴持续音、远处合唱、每两拍一声大钟，没有鼓"],
+        ["boss", "暗王战 · 第一段", "72 拍/分。定音鼓、低音弦乐八分音符、大钟，和弦 Dm – E♭ – Gm – A"],
+        ["boss2", "暗王战 · 第二段（王冠倾斜）", "116 拍/分，Dm – B♭ – Gm – A7♭9。底下是急促的切分节奏，上面是女声合唱的长音、铜管众赞歌和每小节一声大钟"],
+        ["bossOld", "对比：现在的 Boss 曲", "150 拍/分，C 小调，电子鼓组 + 管风琴"],
+      ];
+
+      const sfx = new Sfx();
+      const list = document.querySelector("#list");
+      list.innerHTML = items
+        .map(([id, name, note]) => `<button data-track="${id}"><span>${name}</span><span>▶</span><small>${note}</small></button>`)
+        .join("");
+      document.addEventListener("click", (e) => {
+        const btn = e.target.closest("[data-track]");
+        if (!btn) return;
+        sfx.unlock();
+        const id = btn.dataset.track || null;
+        sfx.music.play(id);
+        for (const b of document.querySelectorAll("[data-track]")) b.classList.toggle("on", Boolean(id) && b === btn);
+      });
+    </script>
+  </body>
+</html>

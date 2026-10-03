@@ -1166,3 +1166,33 @@ test("拖动换装：出战内调整顺序、闲置拖上去（有空槽插入�
   moveLoadout(hero, { kind: "skill", id: "swift", toZone: "off", targetId: null });
   assert.deepEqual(hero.equippedSkills, ["stun"], "技能可以全部换下");
 });
+
+test("暗王二阶段：心阵第一次清空时不倒下，换成另一种形状的心阵补满，招式换一套；再清空才算胜利", () => {
+  const king = MONSTERS.king;
+  assert.ok(king.rebirth, "暗王有二阶段");
+  assert.equal(shapeProblem(king.rebirth.matrixValues), null, "二阶段心阵也要连成一片");
+  assert.ok(isMirrorSymmetric(king.rebirth.matrixValues), "二阶段心阵左右对称");
+  assert.notDeepEqual(king.rebirth.matrixValues, heartsAt(king, 2), "二阶段换一种形状");
+  assert.ok(!king.rebirth.pattern.some((p) => p.kind === "heal"), "二阶段不再回血");
+
+  // 只剩一颗心的暗王：短剑打掉它，进入二阶段。
+  const combat = createCombat({
+    hero: { matrix: filledMatrix(7, 7), weapons: ["dagger", "hammer"], potions: 0 },
+    monster: { def: king, matrix: parseMatrix(["#"]) },
+    rng: createRng(5),
+  });
+  combat.weapons[1].cd = 3;
+  const result = heroAttack(combat, "dagger", 0, 0);
+  assert.ok(result.events.some((e) => e.type === "rebirth"), "触发二阶段");
+  assert.ok(!result.events.some((e) => e.type === "won"), "这一下不算胜利");
+  assert.equal(combat.phase, "hero", "仍由主角先出手");
+  assert.deepEqual(combat.monsterMatrix, king.rebirth.matrixValues, "换成二阶段的满血心阵");
+  assert.equal(combat.weapons[1].cd, 0, "武器冷却清空");
+  assert.equal(combat.intent, king.rebirth.pattern[0], "招式从新的一套第一招开始");
+
+  // 二阶段再清空：胜利。
+  combat.monsterMatrix = parseMatrix(["#"]);
+  const final = heroAttack(combat, "dagger", 0, 0);
+  assert.ok(final.events.some((e) => e.type === "won"));
+  assert.equal(combat.phase, "won");
+});
