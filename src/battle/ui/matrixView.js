@@ -290,43 +290,6 @@ export class MatrixView {
   }
 
   /**
-   * 打断：一道粗重的锯齿裂痕劈开整块心阵（墨黑描边、纸白芯，像被劈开的石板），
-   * 裂痕两侧的心阵各自错开一下再合拢，裂痕随后淡去。
-   */
-  fracture() {
-    const host = this.box ?? this.el;
-    const bolt = "M-2 22 L18 30 L27 18 L41 41 L52 33 L61 57 L74 49 L83 72 L102 80";
-    const crack = document.createElement("i");
-    crack.className = "fracture";
-    crack.innerHTML = `<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-      <path class="edge" d="${bolt} M41 41 L35 62 M61 57 L70 30"/>
-      <path class="core" d="${bolt} M41 41 L35 62 M61 57 L70 30"/></svg>`;
-    // 裂痕只盖住有心的那一块（不含四周的界外格）。
-    const slots = [...this.cells.values()].filter((cell) => cell.classList.contains("slot"));
-    if (slots.length) {
-      const base = host.getBoundingClientRect();
-      const rects = slots.map((cell) => cell.getBoundingClientRect());
-      const left = Math.min(...rects.map((b) => b.left)) - base.left;
-      const top = Math.min(...rects.map((b) => b.top)) - base.top;
-      Object.assign(crack.style, {
-        inset: "auto",
-        left: `${left}px`,
-        top: `${top}px`,
-        width: `${Math.max(...rects.map((b) => b.right)) - base.left - left}px`,
-        height: `${Math.max(...rects.map((b) => b.bottom)) - base.top - top}px`,
-      });
-    }
-    host.appendChild(crack);
-    this.el.classList.remove("splitting");
-    void this.el.offsetWidth;
-    this.el.classList.add("splitting");
-    setTimeout(() => {
-      crack.remove();
-      this.el.classList.remove("splitting");
-    }, 1250);
-  }
-
-  /**
    * 红心一颗颗填进空框：每格叠一颗红心，按顺序错开弹出，全部填完再写入新矩阵。
    */
   async fillHearts(changes, nextMatrix, step = 38) {

@@ -590,14 +590,15 @@ export function runBattle({ root, combat, monster, world, sfx, heroFirst, featur
     const target = monsterEntity();
     if (heroObj && target) world.attackAnim(heroObj, target, broken);
     render();
-    // 终局的最后一击与打断：慢放，先顿住再碎。
+    // 终局的最后一击：慢放，先顿住再碎。
     const finalBlow = def.boss && combat.phase === "won";
-    const interrupting = result.events.some((e) => e.type === "interrupt");
-    if (finalBlow) sfx.music.play(null, { fadeOut: 0.15 });
-    if (finalBlow || interrupting) modal.classList.add("hitstop");
+    if (finalBlow) {
+      sfx.music.play(null, { fadeOut: 0.15 });
+      modal.classList.add("hitstop");
+    }
     // 形状先闪一下；重击再顿一拍（打击停顿），碎裂才更有分量。
-    enemyView.strike(combat.lastFootprint, { heavy: heavy || finalBlow || interrupting });
-    await delay(finalBlow ? 700 : interrupting ? 420 : heavy ? 260 : 140);
+    enemyView.strike(combat.lastFootprint, { heavy: heavy || finalBlow });
+    await delay(finalBlow ? 700 : heavy ? 260 : 140);
     modal.classList.remove("hitstop");
     if (heavy) {
       sfx.play("impact", event.hits.length);
@@ -607,25 +608,6 @@ export function runBattle({ root, combat, monster, world, sfx, heroFirst, featur
     }
     if (broken) sfx.play("shatter", broken);
     if (cracked) sfx.play("crack");
-    // 打断在锤子落下的那一刻爆开，再碎心。
-    if (interrupting) {
-      // 打断：画面反白一闪，心阵被劈开再合拢，怪物的「下一招」横条断开掉落，整张卡片一震。
-      sfx.play("glass");
-      sfx.play("impact", 6);
-      for (const cls of ["break-flash", "impact"]) {
-        modal.classList.remove(cls);
-        void modal.offsetWidth;
-        modal.classList.add(cls);
-      }
-      setTimeout(() => modal.classList.remove("break-flash"), 160);
-      enemyView.fracture();
-      const intent = $("[data-side=enemy] .intent");
-      intent.classList.remove("broken");
-      void intent.offsetWidth;
-      intent.classList.add("broken");
-      setTimeout(() => intent.classList.remove("broken"), 900);
-      setTimeout(() => floatText("enemy", "打断！", "dmg big"), 200);
-    }
     floatText("enemy", `-${event.hits.length}`, heavy ? "dmg big" : "dmg");
     enemyView.shake(heavy);
     // 首领进入二阶段时，战斗状态里已经是新心阵：碎心动画先落在旧心阵上，新心阵留给转场演出。
@@ -667,6 +649,10 @@ export function runBattle({ root, combat, monster, world, sfx, heroFirst, featur
     }
     if (result.events.some((e) => e.type === "parry")) {
       setTimeout(() => floatText("hero", "招架", "chase"), 360);
+    }
+    if (result.events.some((e) => e.type === "interrupt")) {
+      sfx.play("stun");
+      setTimeout(() => floatText("enemy", "打断！", "chase"), 420);
     }
     const drained = result.events.find((e) => e.type === "heal" && e.side === "hero");
     if (drained) {

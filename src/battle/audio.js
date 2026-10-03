@@ -398,12 +398,6 @@ export class Sfx {
         [0, 6, 11].forEach((iv) => this.tone(midi(50 + iv), 0.7, { volume: 0.03, type: "square", filter: 1400, slide: -30 }));
         this.noise(0.3, { volume: 0.04, filter: 400 });
         break;
-      case "glass":
-        // 打断：一声玻璃般的碎裂，带一点下坠的金属尾音。
-        this.noise(0.45, { volume: 0.07, filter: 5200, sweep: 1800, type: "bandpass", q: 1.4 });
-        this.metal(1900, 0.6, { volume: 0.03 });
-        this.tone(1400, 0.4, { type: "triangle", volume: 0.02, slide: -900, delay: 0.04 });
-        break;
       case "resolve":
         // 终局：一个落到 D 大调的和弦，底下一声钟。
         this.bellToll(73.4, 5, 0.05);

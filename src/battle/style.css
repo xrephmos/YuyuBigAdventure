@@ -5841,7 +5841,7 @@ body.dev-mode .dev-badge {
   }
 }
 
-/* 顿帧：最后一击与打断，整张卡片定住一瞬，微微放大。 */
+/* 顿帧：终局的最后一击，整张卡片定住一瞬，微微放大。 */
 .battle-modal.hitstop .battle-card {
   transform: scale(1.012);
   transition: transform 0.08s;
@@ -5902,112 +5902,6 @@ body.dev-mode .dev-badge {
   }
 }
 
-/* 打断：反白一闪。 */
-.battle-modal.break-flash .battle-card {
-  filter: invert(1);
-}
-
-/* 打断：一道粗重的锯齿裂痕劈开心阵，墨黑描边、纸白芯。 */
-.fracture {
-  position: absolute;
-  inset: 0;
-  z-index: 4;
-  pointer-events: none;
-  animation: fracture-fade 1.25s ease-out forwards;
-}
-
-.fracture svg {
-  width: 100%;
-  height: 100%;
-  overflow: visible;
-}
-
-.fracture path {
-  fill: none;
-  stroke-linejoin: miter;
-  vector-effect: non-scaling-stroke;
-  stroke-dasharray: 400;
-  stroke-dashoffset: 400;
-  animation: fracture-draw 0.12s ease-out forwards;
-}
-
-.fracture .edge {
-  stroke: var(--ink);
-  stroke-width: 9px;
-}
-
-.fracture .core {
-  stroke: var(--paper);
-  stroke-width: 3px;
-}
-
-@keyframes fracture-draw {
-  to {
-    stroke-dashoffset: 0;
-  }
-}
-
-@keyframes fracture-fade {
-  0%,
-  65% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0;
-  }
-}
-
-/* 裂痕两侧错开：心阵整体先被劈得一歪，再合拢。 */
-.matrix.splitting {
-  animation: split-jolt 0.55s var(--ease-entry);
-}
-
-/* 用独立的 translate / rotate 属性：心阵靠 transform 在外框里居中，不能覆盖它。 */
-@keyframes split-jolt {
-  0% {
-    translate: 0 0;
-    rotate: 0deg;
-  }
-  12% {
-    translate: -7px 5px;
-    rotate: -1.4deg;
-  }
-  30% {
-    translate: 5px -3px;
-    rotate: 0.8deg;
-  }
-  100% {
-    translate: 0 0;
-    rotate: 0deg;
-  }
-}
-
-/* 打断：怪物的「下一招」横条断开、往下掉一截，再回到原位。 */
-.intent.broken {
-  animation: intent-break 0.9s var(--ease-entry);
-}
-
-@keyframes intent-break {
-  0% {
-    transform: none;
-  }
-  15% {
-    transform: translateY(10px) rotate(-3deg);
-    clip-path: polygon(0 0, 46% 0, 52% 100%, 0 100%);
-    opacity: 0.85;
-  }
-  55% {
-    transform: translateY(14px) rotate(-4deg);
-    clip-path: polygon(0 0, 46% 0, 52% 100%, 0 100%);
-    opacity: 0.4;
-  }
-  100% {
-    transform: none;
-    clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%);
-    opacity: 1;
-  }
-}
-
 /* 吸取：小红心从主角心阵飞向怪物心阵。 */
 .flying-heart {
   position: absolute;
@@ -6061,10 +5955,6 @@ body.processional .dpad {
   .battle-modal.dread .matrix-hero .cell.aim,
   .ink-splat,
   .ink-splat b,
-  .fracture,
-  .fracture path,
-  .matrix.splitting,
-  .intent.broken,
   .flying-heart {
     animation-duration: 0.01s;
   }
