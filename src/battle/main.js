@@ -212,6 +212,8 @@ let board = null;
 let levelIndex = 0;
 let busy = false;
 let playing = false;
+// 从章节开场页进入终章时播一次入殿运镜（重新开始本章时不播）。
+let processionalPending = false;
 let hoverTile = null;
 let walkToken = 0;
 let levelGen = 0;
@@ -1023,13 +1025,41 @@ function startLevel(index, { intro = true } = {}) {
   document.body.classList.add("in-level");
   // 试玩记录：每进入一章（含重玩、重新开始）记一次，只发不收，不影响本机存档。
   if (!dev) recordChapterStart({ name: progress.name, level, index, progress });
+  processionalPending = intro && level.goal === "boss";
   if (intro) showIntro();
   else begin();
+}
+
+/**
+ * 入殿运镜：棋盘界面收起，镜头贴着长毯从起点推向王座，钟声三响，横幅打出章节名，再回到平常的视角。
+ */
+async function playProcessional() {
+  const king = board.monsters.find((m) => m.def.boss);
+  if (!king) return;
+  busy = true;
+  document.body.classList.add("processional");
+  [0, 1300, 2600].forEach((ms) => setTimeout(() => sfx.play("toll"), ms));
+  const walk = world.processional(board.hero, king);
+  await new Promise((done) => setTimeout(done, 1600));
+  const banner = document.createElement("div");
+  banner.className = "stage-card board-banner";
+  banner.innerHTML = `<p class="t-meta">Final · 终章</p><h2>${board.level.name}</h2>`;
+  document.body.appendChild(banner);
+  await new Promise((done) => setTimeout(done, 2200));
+  banner.classList.add("leaving");
+  setTimeout(() => banner.remove(), 400);
+  await walk;
+  document.body.classList.remove("processional");
+  busy = false;
 }
 
 async function begin() {
   hideScreen();
   const level = board.level;
+  if (processionalPending) {
+    processionalPending = false;
+    await playProcessional();
+  }
   const has = (ch) => level.map.some((row) => row.includes(ch));
   const topics = [];
   // 新技能一进章节就到手：先报一声，再排在说明卡最前面讲它是什么（不等第一场战斗）。

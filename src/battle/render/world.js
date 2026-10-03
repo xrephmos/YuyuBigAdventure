@@ -667,6 +667,38 @@ export class BoardWorld {
     this.burst(group.position.clone().setY(1.2), 30, this.inkMaterial, 1.1);
   }
 
+  /** 首领认输：像棋手认输时那样，把王慢慢放倒。 */
+  async resignBoss(group) {
+    const start = group.rotation.z;
+    await this.tween(1700, (t) => {
+      group.rotation.z = start + (1.45 - start) * t;
+    });
+    this.burst(group.position.clone().setY(0.2), 18, this.inkMaterial, 0.8);
+  }
+
+  /** 墨迹退去：从离出口最远的一排开始，每一格冒出墨色碎块，一排排收向出口，最后出口处一片蓝色碎块。 */
+  async recedeInk(exit) {
+    for (let r = SIZE - 1; r >= 0; r -= 1) {
+      for (let c = 0; c < SIZE; c += 1) this.burst(tileCenter(r, c).setY(0.12), 2, this.inkMaterial, 0.25);
+      await new Promise((done) => setTimeout(done, 140));
+    }
+    if (exit) this.burst(tileCenter(exit.r, exit.c).setY(0.4), 30, this.sparkMaterial, 1.2);
+  }
+
+  /** 入殿运镜：镜头贴着长毯从起点往王座推过去，在王座前停一拍，再回到平常的视角。 */
+  async processional(from, to) {
+    const a = tileCenter(from.r, from.c);
+    const b = tileCenter(to.r, to.c);
+    const look = b.clone().setY(0.9);
+    this.controls.enabled = false;
+    this.camera.position.copy(a.clone().add(new THREE.Vector3(0, 0.75, 1.9)));
+    this.controls.target.copy(look);
+    this.controls.update();
+    await this.moveCamera(b.clone().add(new THREE.Vector3(0, 1.3, 2.7)), look, 3600);
+    await new Promise((done) => setTimeout(done, 700));
+    await this.resetView(1300);
+  }
+
   async defeatMonster(m) {
     const entry = this.monsters.get(m.uid);
     if (!entry) return;

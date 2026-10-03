@@ -5805,3 +5805,214 @@ body.dev-mode .dev-badge {
 .move-figure figcaption span {
   color: var(--text-secondary);
 }
+
+/* ——— 暗王战的演出 ——— */
+
+/* 蓄力：墨色从战斗卡四周往里渗，之后随心跳一胀一缩，直到重击落下或被打断。 */
+.dread-frame {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  border: 0 solid rgba(var(--ink-rgb), 0.86);
+  opacity: 0;
+  transition: opacity 0.4s var(--ease-prod);
+}
+
+.battle-modal.dread .dread-frame {
+  opacity: 1;
+  animation:
+    dread-in 1.1s var(--ease-entry) forwards,
+    dread-pulse 1.6s 1.1s ease-in-out infinite;
+}
+
+@keyframes dread-in {
+  from {
+    border-width: 0;
+  }
+  to {
+    border-width: 12px;
+  }
+}
+
+@keyframes dread-pulse {
+  0%,
+  100% {
+    border-width: 12px;
+  }
+  50% {
+    border-width: 18px;
+  }
+}
+
+/* 蓄力之后被瞄准的格子跟着心跳一下下鼓起。 */
+.battle-modal.dread .matrix-hero .cell.aim {
+  animation: aim-throb 0.8s ease-in-out infinite;
+}
+
+@keyframes aim-throb {
+  50% {
+    transform: scale(1.1);
+  }
+}
+
+/* 顿帧：最后一击与打断，整张卡片定住一瞬，微微放大。 */
+.battle-modal.hitstop .battle-card {
+  transform: scale(1.012);
+  transition: transform 0.08s;
+}
+
+/* 终局：心阵的格子按远近一圈圈碎掉。 */
+.cell.crumbling {
+  animation: crumble 0.5s var(--d, 0ms) var(--ease-prod) forwards;
+}
+
+@keyframes crumble {
+  to {
+    opacity: 0;
+    transform: scale(0.3) rotate(18deg);
+  }
+}
+
+/* 死灭溅墨：一团墨炸开，几滴墨点向外飞。 */
+.ink-splat {
+  position: absolute;
+  inset: 12%;
+  z-index: 4;
+  pointer-events: none;
+  background: var(--ink);
+  animation: splat 0.75s var(--ease-entry) forwards;
+}
+
+.ink-splat b {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 5px;
+  height: 5px;
+  margin: -2.5px 0 0 -2.5px;
+  background: var(--ink);
+  animation: splat-drop 0.6s var(--ease-entry) forwards;
+}
+
+@keyframes splat {
+  0% {
+    transform: scale(0.2);
+    opacity: 1;
+  }
+  40% {
+    transform: scale(1.15);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 0;
+  }
+}
+
+@keyframes splat-drop {
+  to {
+    transform: translate(var(--x), var(--y));
+    opacity: 0;
+  }
+}
+
+/* 打断：心阵上划过几道玻璃般的裂纹。 */
+.glass-crack {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+  animation: crack-fade 1.1s ease-out forwards;
+}
+
+.glass-crack svg {
+  width: 100%;
+  height: 100%;
+}
+
+.glass-crack path {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 0.9;
+  vector-effect: non-scaling-stroke;
+  stroke-dasharray: 160;
+  stroke-dashoffset: 160;
+  animation: crack-draw 0.22s ease-out forwards;
+}
+
+@keyframes crack-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes crack-fade {
+  0%,
+  60% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* 吸取：小红心从主角心阵飞向怪物心阵。 */
+.flying-heart {
+  position: absolute;
+  z-index: 20;
+  width: 16px;
+  height: 16px;
+  margin: -8px 0 0 -8px;
+  pointer-events: none;
+  animation: heart-fly 0.7s cubic-bezier(0.5, -0.3, 0.3, 1) both;
+}
+
+.flying-heart .heart-svg {
+  width: 16px;
+  height: 16px;
+}
+
+@keyframes heart-fly {
+  0% {
+    transform: translate(0, 0) scale(0.5);
+    opacity: 0;
+  }
+  15% {
+    transform: translate(0, -10px) scale(1.2);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--dx), var(--dy)) scale(0.8);
+    opacity: 0.9;
+  }
+}
+
+/* 棋盘上的标题横幅（入殿运镜时用）：和战斗里的一样，只是固定在整个屏幕上。 */
+.stage-card.board-banner {
+  position: fixed;
+  z-index: 70;
+}
+
+/* 入殿运镜时收起棋盘界面，只留 3D 画面。 */
+body.processional .topbar,
+body.processional .hud,
+body.processional .hint-bar,
+body.processional .hud-strip,
+body.processional .dpad {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.4s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .battle-modal.dread .dread-frame,
+  .battle-modal.dread .matrix-hero .cell.aim,
+  .ink-splat,
+  .ink-splat b,
+  .glass-crack,
+  .glass-crack path,
+  .flying-heart {
+    animation-duration: 0.01s;
+  }
+}

@@ -144,6 +144,7 @@ export function runBattle({ root, combat, monster, world, sfx, heroFirst, featur
       <div class="battle-log" data-log aria-live="polite"></div>
       <div class="battle-toast" data-toast></div>
       <div class="battle-result" data-result hidden></div>
+      <i class="dread-frame" aria-hidden="true"></i>
     </div>
   </div>`;
 
@@ -589,9 +590,15 @@ export function runBattle({ root, combat, monster, world, sfx, heroFirst, featur
     const target = monsterEntity();
     if (heroObj && target) world.attackAnim(heroObj, target, broken);
     render();
+    // 终局的最后一击与打断：慢放，先顿住再碎。
+    const finalBlow = def.boss && combat.phase === "won";
+    const interrupting = result.events.some((e) => e.type === "interrupt");
+    if (finalBlow) sfx.music.play(null, { fadeOut: 0.15 });
+    if (finalBlow || interrupting) modal.classList.add("hitstop");
     // 形状先闪一下；重击再顿一拍（打击停顿），碎裂才更有分量。
-    enemyView.strike(combat.lastFootprint, { heavy });
-    await delay(heavy ? 260 : 140);
+    enemyView.strike(combat.lastFootprint, { heavy: heavy || finalBlow || interrupting });
+    await delay(finalBlow ? 700 : interrupting ? 420 : heavy ? 260 : 140);
+    modal.classList.remove("hitstop");
     if (heavy) {
       sfx.play("impact", event.hits.length);
       modal.classList.remove("impact");
@@ -642,9 +649,10 @@ export function runBattle({ root, combat, monster, world, sfx, heroFirst, featur
     if (result.events.some((e) => e.type === "parry")) {
       setTimeout(() => floatText("hero", "招架", "chase"), 360);
     }
-    if (result.events.some((e) => e.type === "interrupt")) {
-      sfx.play("stun");
-      setTimeout(() => floatText("enemy", "打断！", "chase"), 420);
+    if (interrupting) {
+      sfx.play("glass");
+      enemyView.glassCrack();
+      setTimeout(() => floatText("enemy", "打断！", "chase"), 220);
     }
     const drained = result.events.find((e) => e.type === "heal" && e.side === "hero");
     if (drained) {
@@ -652,7 +660,10 @@ export function runBattle({ root, combat, monster, world, sfx, heroFirst, featur
       floatText("hero", `+${drained.changes.length}`, "heal");
       await heroView.animate(drained.changes, "heal", combat.heroMatrix);
     }
-    if (result.events.some((e) => e.type === "won")) return finish();
+    if (result.events.some((e) => e.type === "won")) {
+      if (finalBlow) await playFinale();
+      return finish();
+    }
     // 第一次完美命中、心阵上出现蓝色虚线框：这时候才讲连击。
     if (afterPerfectHit && combat.combo > 0) {
       const explainCombo = afterPerfectHit;
@@ -738,6 +749,7 @@ export function runBattle({ root, combat, monster, world, sfx, heroFirst, featur
    */
   async function playRebirth(event) {
     const king = monsterEntity();
+    modal.classList.remove("dread");
     await delay(450);
     sfx.music.play(null, { fadeOut: 1.4 });
     modal.classList.add("cinematic");
@@ -759,6 +771,26 @@ export function runBattle({ root, combat, monster, world, sfx, heroFirst, featur
     await delay(380);
     await assembleEnemy(combat.monsterMatrix, { fromBottom: true });
     modal.classList.remove("rebirth");
+  }
+
+  /**
+   * 终局：最后一击之后，心阵从被打中的地方一圈圈碎掉；一片寂静；战斗卡隐去，
+   * 暗王像棋手认输那样慢慢把棋子放倒，墨迹一排排退回出口；一个落到大调的和弦，横幅「将死」。
+   */
+  async function playFinale() {
+    const king = monsterEntity();
+    modal.classList.remove("dread");
+    await enemyView.crumble(combat.lastFootprint ?? []);
+    await delay(800);
+    modal.classList.add("cinematic");
+    await delay(600);
+    if (king) await world.resignBoss(king);
+    await delay(400);
+    world.recedeInk(world.exit ? { r: Math.round(world.exit.position.z + 3.5), c: Math.round(world.exit.position.x + 3.5) } : null);
+    await delay(1300);
+    sfx.play("resolve");
+    await stageCard("Checkmate · 终局", "将死", 2000);
+    modal.classList.remove("cinematic");
   }
 
   /** 收起浮窗用的时长，与 phone.css 里 heal-close 动画一致。 */
@@ -859,10 +891,13 @@ export function runBattle({ root, combat, monster, world, sfx, heroFirst, featur
     await delay(heroFirst || combat.round > 1 ? 380 : 650);
     const linksBefore = comboLinks(combat.combo);
     const result = monsterTurn(combat);
+    // 吸取攻击打中的格子：随后的回血事件里，红心从这些格子飞向怪物的心阵。
+    let drained = null;
     const heroObj = heroEntity();
     const target = monsterEntity();
     for (const event of result.events) {
       if (event.type === "monster-attack") {
+        modal.classList.remove("dread");
         if (target && heroObj) world.attackAnim(target, heroObj, event.hits.length);
         // 重击（一次打掉 HEAVY_HIT 颗及以上）：主角心阵弹出放大的浮窗（竖屏手机），先闪出这一招盖住的格子，再在浮窗里碎心。
         // 两三颗心的普通攻击照常在原地碎心，不打断节奏。
@@ -886,10 +921,13 @@ export function runBattle({ root, combat, monster, world, sfx, heroFirst, featur
           heroView.shake(heavy);
           modal.classList.add("hurt");
           setTimeout(() => modal.classList.remove("hurt"), 400);
+          if (event.intent.drain) drained = event.hits.map(({ r, c }) => [r, c]);
           await heroView.animate(event.hits, "hit", combat.heroMatrix, { heavy });
           if (event.doomed?.length) {
-            // 死灭：打空的格子画上 ×，本场战斗补不回来。
+            // 死灭：打空的格子先炸开一团墨，再画上 ×，本场战斗补不回来。
             sfx.play("curse");
+            heroView.inkSplat(event.doomed);
+            await delay(320);
             heroView.markDoomed(combat.heroDoomed);
             floatText("hero", "死灭", "curse");
             await delay(380);
@@ -905,11 +943,18 @@ export function runBattle({ root, combat, monster, world, sfx, heroFirst, featur
         }
       } else if (event.type === "charge") {
         sfx.play("charge");
+        // 蓄力：墨色从屏幕四周往里渗，直到这一记重击落下或被打断。
+        modal.classList.add("dread");
         floatText("enemy", "蓄力", "charge");
         $('[data-side="enemy"]').classList.add("charging");
         setTimeout(() => $('[data-side="enemy"]')?.classList.remove("charging"), 900);
         await delay(650);
       } else if (event.type === "heal") {
+        if (drained && event.changes.length) {
+          sfx.play("energy", 1);
+          await flyHearts(drained, event.changes.map(({ r, c }) => [r, c]));
+          drained = null;
+        }
         sfx.play("pray");
         if (event.changes.length) floatText("enemy", `+${event.changes.length}`, "heal");
         await enemyView.animate(event.changes, "heal", combat.monsterMatrix);
@@ -918,6 +963,7 @@ export function runBattle({ root, combat, monster, world, sfx, heroFirst, featur
         floatText("enemy", "护甲", "armor");
         await enemyView.animate(event.changes, "armor", combat.monsterMatrix);
       } else if (event.type === "interrupted") {
+        modal.classList.remove("dread");
         sfx.play("block");
         floatText("enemy", "被打断", "charge");
         await delay(650);
@@ -943,6 +989,33 @@ export function runBattle({ root, combat, monster, world, sfx, heroFirst, featur
    * 轮到主角出手。怪物第一次准备回血（心阵上出现红色虚线框）时，先停下来讲怎么打断这次回血：
    * 这时候虚线框就摆在眼前，比开战前讲更容易看懂。只讲一次。
    */
+  /** 吸取：一颗颗小红块从主角心阵被打中的格子飞向怪物心阵要补回的格子。 */
+  async function flyHearts(fromCells, toCells) {
+    const card = $(".battle-card").getBoundingClientRect();
+    const center = (view, [r, c]) => {
+      const el = view.cells.get(`${r},${c}`);
+      if (!el) return null;
+      const b = el.getBoundingClientRect();
+      return { x: b.left + b.width / 2 - card.left, y: b.top + b.height / 2 - card.top };
+    };
+    toCells.forEach((to, i) => {
+      const a = center(heroView, fromCells[i % fromCells.length]);
+      const b = center(enemyView, to);
+      if (!a || !b) return;
+      const bit = document.createElement("i");
+      bit.className = "flying-heart";
+      bit.innerHTML = heartSvg("heart");
+      bit.style.left = `${a.x}px`;
+      bit.style.top = `${a.y}px`;
+      bit.style.setProperty("--dx", `${b.x - a.x}px`);
+      bit.style.setProperty("--dy", `${b.y - a.y}px`);
+      bit.style.animationDelay = `${i * 110}ms`;
+      $(".battle-card").appendChild(bit);
+      setTimeout(() => bit.remove(), 820 + i * 110);
+    });
+    await delay(700 + toCells.length * 110);
+  }
+
   async function beginHeroTurn() {
     if (onHealPlan && combat.intent?.kind === "heal" && combat.healPlan?.length) {
       const explainHeal = onHealPlan;
@@ -953,6 +1026,8 @@ export function runBattle({ root, combat, monster, world, sfx, heroFirst, featur
     }
     busy = false;
     render();
+    // 蓄力之后的重击就要落下：一声心跳。
+    if (modal.classList.contains("dread")) sfx.play("heartbeat", 1);
   }
 
   function finish() {

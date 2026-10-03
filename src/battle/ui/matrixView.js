@@ -252,6 +252,53 @@ export class MatrixView {
     for (const [r, c] of cells ?? []) this.cells.get(`${r},${c}`)?.classList.add("heal-plan");
   }
 
+  /** 死灭溅墨：格子上炸开一团墨，几滴墨点向外飞溅。 */
+  inkSplat(cells) {
+    for (const [r, c] of cells) {
+      const cell = this.cells.get(`${r},${c}`);
+      if (!cell) continue;
+      const splat = document.createElement("i");
+      splat.className = "ink-splat";
+      for (let k = 0; k < 6; k += 1) {
+        const drop = document.createElement("b");
+        const a = (Math.PI * 2 * k) / 6 + Math.random() * 0.7;
+        drop.style.setProperty("--x", `${Math.cos(a) * (14 + Math.random() * 10)}px`);
+        drop.style.setProperty("--y", `${Math.sin(a) * (14 + Math.random() * 10)}px`);
+        splat.appendChild(drop);
+      }
+      cell.appendChild(splat);
+      setTimeout(() => splat.remove(), 900);
+    }
+  }
+
+  /** 终局：心阵的格子从 origin 一带开始，按远近一圈圈碎掉。 */
+  async crumble(origin = []) {
+    const cells = [...this.cells.values()].filter((cell) => cell.classList.contains("slot"));
+    const [or, oc] = origin.length
+      ? [origin.reduce((s, [r]) => s + r, 0) / origin.length, origin.reduce((s, [, c]) => s + c, 0) / origin.length]
+      : [this.matrix.length / 2, this.matrix[0].length / 2];
+    let last = 0;
+    for (const cell of cells) {
+      const d = Math.hypot(+cell.dataset.r - or, +cell.dataset.c - oc);
+      const wait = Math.round(d * 90);
+      last = Math.max(last, wait);
+      cell.style.setProperty("--d", `${wait}ms`);
+      cell.classList.add("crumbling");
+      setTimeout(() => this.spawnShards(cell, false), wait);
+    }
+    await new Promise((done) => setTimeout(done, last + 520));
+  }
+
+  /** 打断：心阵上划过几道玻璃般的裂纹，随后淡去。 */
+  glassCrack() {
+    const crack = document.createElement("i");
+    crack.className = "glass-crack";
+    crack.innerHTML = `<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+      <path d="M50 48 L20 8 M50 48 L88 14 M50 48 L95 62 M50 48 L62 96 M50 48 L12 80 M50 48 L4 40 M35 28 L28 40 M70 30 L80 42 M74 56 L84 70 M40 70 L30 74"/></svg>`;
+    (this.box ?? this.el).appendChild(crack);
+    setTimeout(() => crack.remove(), 1100);
+  }
+
   /**
    * 红心一颗颗填进空框：每格叠一颗红心，按顺序错开弹出，全部填完再写入新矩阵。
    */
