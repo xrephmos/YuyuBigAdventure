@@ -683,9 +683,11 @@ export function runBattle({ root, combat, monster, world, sfx, heroFirst, featur
   const HEAL_CLOSE_MS = 170;
   /** 弹出浮窗用的时长，与 phone.css 里 heal-pop 动画一致。 */
   const HEAL_POP_MS = 260;
+  /** 怪物一次打掉这么多颗心算重击：弹出浮窗、加重震动与音效。 */
+  const HEAVY_HIT = 4;
 
   /**
-   * 怪物出手：竖屏手机上主角心阵很小，被打中时和喝药一样弹出放大的浮窗，
+   * 怪物重击：竖屏手机上主角心阵很小，被重击时和喝药一样弹出放大的浮窗，
    * 浮窗里先标出这一招盖住的格子，再演示红心被打碎。其余布局心阵本来就够大，不弹窗。
    * 返回是否弹出了浮窗。
    */
@@ -780,10 +782,11 @@ export function runBattle({ root, combat, monster, world, sfx, heroFirst, featur
     for (const event of result.events) {
       if (event.type === "monster-attack") {
         if (target && heroObj) world.attackAnim(target, heroObj, event.hits.length);
-        // 打中或被格挡时：主角心阵弹出放大的浮窗（竖屏手机），先闪出这一招盖住的格子，再在浮窗里碎心。
-        const popped = (event.blocked || event.hits.length > 0) && (await openHurtPop(event));
+        // 重击（一次打掉 HEAVY_HIT 颗及以上）：主角心阵弹出放大的浮窗（竖屏手机），先闪出这一招盖住的格子，再在浮窗里碎心。
+        // 两三颗心的普通攻击照常在原地碎心，不打断节奏。
+        const heavy = event.hits.length >= HEAVY_HIT;
+        const popped = heavy && (await openHurtPop(event));
         if (!popped) await delay(170);
-        const heavy = event.hits.length >= 4;
         if (event.anchor) {
           heroView.strike(footprint(event.intent.shape, event.anchor.r, event.anchor.c), { heavy, foe: !event.blocked });
           await delay(heavy ? 240 : 150);
