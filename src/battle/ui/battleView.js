@@ -801,12 +801,11 @@ export function runBattle({ root, combat, monster, world, sfx, heroFirst, featur
   const HEAVY_HIT = 4;
 
   /**
-   * 怪物重击：竖屏手机上主角心阵很小，被重击时和喝药一样弹出放大的浮窗，
-   * 浮窗里先标出这一招盖住的格子，再演示红心被打碎。其余布局心阵本来就够大，不弹窗。
+   * 怪物重击：主角心阵弹出放大的浮窗，先标出这一招盖住的格子，再演示红心被打碎。
+   * 竖屏手机上和喝药一样变成放大的浮窗（重排格子）；电脑与手机横屏上心阵原地放大浮起（只靠 CSS 变换，不重排）。
    * 返回是否弹出了浮窗。
    */
   async function openHurtPop(event) {
-    if (!stacked) return false;
     modal.classList.add("hurt-pop");
     refitNow();
     // 浮窗里的格子是按新尺寸重建的，把这一招的墨黑格重新标上。

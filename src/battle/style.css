@@ -5959,3 +5959,39 @@ body.processional .dpad {
     animation-duration: 0.01s;
   }
 }
+
+/*
+ * 电脑与手机横屏：被重击时主角心阵原地放大浮起，和竖屏手机上的浮窗同一种样子（略微倾斜、投影、红色外框），
+ * 演示完再落回原位。只用变换，不改外框尺寸，格子不用重排。时长与 battleView.js 的 HEAL_POP_MS / HEAL_CLOSE_MS 一致。
+ */
+.battle-modal:not(.portrait).hurt-pop .side.hero .matrix-box {
+  z-index: 20;
+  outline: 2px solid var(--heart);
+  box-shadow: 0 18px 40px rgba(10, 10, 10, 0.28);
+  transform: scale(1.12) rotate(-1deg);
+  animation: hurt-float-in 0.26s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.battle-modal:not(.portrait).hurt-pop.heal-closing .side.hero .matrix-box {
+  animation: hurt-float-out 0.17s cubic-bezier(0.4, 0, 1, 1) forwards;
+}
+
+@keyframes hurt-float-in {
+  from {
+    transform: none;
+    box-shadow: none;
+  }
+}
+
+@keyframes hurt-float-out {
+  to {
+    transform: none;
+    box-shadow: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .battle-modal:not(.portrait).hurt-pop .side.hero .matrix-box {
+    animation: none;
+  }
+}
