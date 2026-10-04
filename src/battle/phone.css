@@ -1337,6 +1337,9 @@ html {
 
 .battle-modal.portrait.hurt-pop .side.hero .matrix-box {
   outline: 2px solid var(--heart);
+  /* 重击的浮窗比喝药的再大一点。 */
+  height: min(54vh, 450px);
+  height: min(54dvh, 450px);
 }
 
 .battle-modal.portrait.heal-mode.heal-closing .side.hero .matrix-box,
@@ -1375,10 +1378,13 @@ html {
   .battle-modal.portrait {
     --hero-box: 104px;
   }
-  .battle-modal.portrait.heal-mode .side.hero .matrix-box,
-  .battle-modal.portrait.hurt-pop .side.hero .matrix-box {
+  .battle-modal.portrait.heal-mode .side.hero .matrix-box {
     height: 44vh;
     height: 44dvh;
+  }
+  .battle-modal.portrait.hurt-pop .side.hero .matrix-box {
+    height: 50vh;
+    height: 50dvh;
   }
 }
 

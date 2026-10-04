@@ -393,7 +393,7 @@ export const LEVELS = [
     tip: "殿门只有一条路，城堡守在门口；穿过大殿、踏进内门时，门后的城堡会扑上来。决战前有两座[铁砧]。",
     goal: "boss",
     goalText: "击败暗王，解开[出口]的封印",
-    hero: { rows: 7, cols: 7 },
+    hero: { rows: 8, cols: 8 },
     potions: 3,
     chest: null,
     par: 34,

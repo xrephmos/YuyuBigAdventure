@@ -5968,7 +5968,9 @@ body.processional .dpad {
   z-index: 20;
   outline: 2px solid var(--heart);
   box-shadow: 0 18px 40px rgba(10, 10, 10, 0.28);
-  transform: scale(1.12) rotate(-1deg);
+  transform: scale(1.2) rotate(-1deg);
+  /* 主角心阵在右半边：以偏右的位置为中心放大，浮窗往左、往中间长，不会超出战斗卡。 */
+  transform-origin: 82% 45%;
   animation: hurt-float-in 0.26s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
