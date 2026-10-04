@@ -396,9 +396,9 @@ export const LEVELS = [
     hero: { rows: 7, cols: 7 },
     potions: 3,
     chest: null,
-    par: 38,
+    par: 34,
     // 王座厅：不用棋盘的黑白格，改成一色的普通格子，只显示 7 列（第 8 列整列是墙，不画出来）；
-    // 大厅比别的章节长一倍（16 行），镜头跟着主角往前推，越靠近王座四周越暗。
+    // 大厅比别的章节长一半（12 行），镜头跟着主角往前推，越靠近王座四周和棋盘越暗。
     // 暗王坐在最后一排正中，出口就在它脚下：打倒暗王、站上那一格就通关。
     // 前庭（起点、铁砧、药水）→ 殿门（第一座城堡守在缺口里，不打倒它进不了殿）→ 长长的大殿（成对的书柱与蜡烛）
     // → 内门（第二座城堡守在缺口后面，一踏进缺口就会被它扑上来）→ 王座。
@@ -411,10 +411,6 @@ export const LEVELS = [
       ". . . . . . . b",
       "b b b . b b b b",
       "c . . . . . c b",
-      ". . . . . . . b",
-      ". b . . . b . b",
-      "c . . . . . c b",
-      ". . . . . . . b",
       ". b . . . b . b",
       "c . . . . . c b",
       ". . . . . . . b",
@@ -423,10 +419,10 @@ export const LEVELS = [
       "U . . . . . U b",
       "P . . S . . P b",
     ],
-    carpet: Array.from({ length: 15 }, (_, i) => [i + 1, 3]),
+    carpet: Array.from({ length: 11 }, (_, i) => [i + 1, 3]),
     monsters: [
       { type: "king", at: [0, 3], ai: "static" },
-      { type: "rook", at: [12, 3], ai: "static", drop: "potion" },
+      { type: "rook", at: [8, 3], ai: "static", drop: "potion" },
       { type: "rook", at: [2, 3], ai: "chase", sight: 1, drop: "potion" },
     ],
   },

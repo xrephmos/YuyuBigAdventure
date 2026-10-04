@@ -248,11 +248,11 @@ function reachable(board, from) {
   return seen;
 }
 
-test("每一关都是 8 列、8 行（终章的大厅长一倍，16 行），出口、宝箱、钥匙、药水、铁砧都能走到", () => {
+test("每一关都是 8 列、8 行（终章的大厅长一半，12 行），出口、宝箱、钥匙、药水、铁砧都能走到", () => {
   LEVELS.forEach((level, index) => {
     const board = createBoard(level, { weapons: weaponsForLevel(index, STARTING_WEAPONS) });
     assert.equal(board.cols, 8, level.name);
-    assert.equal(board.rows, level.key === "checkmate" ? 16 : 8, level.name);
+    assert.equal(board.rows, level.key === "checkmate" ? 12 : 8, level.name);
     level.map.forEach((row) => assert.equal(row.replace(/\s+/g, "").length, 8, level.name));
     const seen = reachable(board, board.hero);
     assert.ok(seen.has(key(board.exit.r, board.exit.c)), `${level.name} 出口不可达`);

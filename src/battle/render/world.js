@@ -206,14 +206,16 @@ export class BoardWorld {
       lamp: this.lights.lamp.intensity,
       env: this.scene.environmentIntensity,
       tile: this.tileMats.plain.color.clone(),
+      line: new THREE.Color("#c6c5c0"),
     });
     const from = this.gloom ?? 0;
     this.gloom = t;
     const dark = new THREE.Color("#121212");
     const darkTable = new THREE.Color("#262626");
-    // 大厅外的地面压到接近墨黑，大厅里的格子只暗一点：越往里走，越像只有中间这条路还亮着。
+    // 大厅外的地面压到接近墨黑，大厅里的格子和格线也跟着一起暗下去（比四周亮一些，路还看得清）。
     const darkFloor = new THREE.Color("#2a2a28");
-    const dimTile = new THREE.Color("#c9c8c2");
+    const dimTile = new THREE.Color("#6b6a65");
+    const dimLine = new THREE.Color("#4a4945");
     const apply = (k) => {
       const g = from + (t - from) * k;
       const e = g ** 1.3;
@@ -223,6 +225,7 @@ export class BoardWorld {
       this.lights.lamp.intensity = base.lamp * (1 - 0.3 * e);
       this.scene.environmentIntensity = base.env * (1 - 0.5 * e);
       this.tileMats.plain.color.copy(base.tile).lerp(dimTile, e);
+      if (this.plainGrid) this.plainGrid.children[0]?.material.color.copy(base.line).lerp(dimLine, e);
       if (this.extension) this.extension.material.color.set("#ffffff").lerp(darkFloor, e);
     };
     if (!duration) {
