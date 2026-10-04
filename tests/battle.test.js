@@ -1296,3 +1296,20 @@ test("王座厅：地图与怪物都以显示出来的几列的中线左右对�
   for (const m of lvl.monsters) assert.equal(m.at[1], mid, `${m.type} 不在中线上`);
   for (const [, c] of lvl.carpet) assert.equal(c, mid, "长毯铺在中线上");
 });
+
+test("暗王倒下又站起时，主角趁机喘息：补回一批红心，死灭格补不回来", () => {
+  const king = MONSTERS.king;
+  const hero = filledMatrix(7, 7).map((row) => row.map(() => 0));
+  hero[0][0] = 1;
+  const combat = createCombat({
+    hero: { matrix: hero, weapons: ["dagger"], potions: 0 },
+    monster: { def: king, matrix: parseMatrix(["#"]) },
+    rng: createRng(2),
+  });
+  combat.heroDoomed = [[0, 1]];
+  const result = heroAttack(combat, "dagger", 0, 0);
+  const breather = result.events.find((e) => e.type === "heal" && e.breather);
+  assert.ok(breather, "转二阶段时主角回血");
+  assert.equal(breather.changes.length, king.rebirth.heroHeal);
+  assert.ok(!breather.changes.some(({ r, c }) => r === 0 && c === 1), "死灭格补不回来");
+});
