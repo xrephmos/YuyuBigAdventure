@@ -473,6 +473,14 @@ function rebirth(state, events) {
   state.phase = "monster";
   state.log.push(`${state.def.name}的王冠倾斜了，墨迹重新聚拢。`);
   events.push({ type: "rebirth", title: next.title });
+  // 主角也趁这个空当缓一口气：补回 heroHeal 颗红心（死灭格补不回来）。
+  if (next.heroHeal) {
+    const changes = drainHeal(state, next.heroHeal);
+    if (changes.length) {
+      state.log.push(`${getHeroName()}趁机喘息，恢复了 ${changes.length} 颗红心。`);
+      events.push({ type: "heal", side: "hero", changes, breather: true });
+    }
+  }
   planIntent(state);
 }
 
