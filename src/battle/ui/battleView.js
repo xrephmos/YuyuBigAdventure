@@ -614,8 +614,8 @@ export function runBattle({ root, combat, monster, world, sfx, heroFirst, featur
     const reborn = result.events.find((e) => e.type === "rebirth");
     await enemyView.animate(event.hits, "hit", reborn ? applyChanges(enemyView.matrix, event.hits) : combat.monsterMatrix, { heavy });
     if (reborn) {
-      // 二阶段由暗王先出手；转场时主角趁机喘息回的红心在过场里演出来。
-      await playRebirth(reborn, result.events.find((e) => e.type === "heal" && e.breather));
+      // 二阶段由暗王先出手。
+      await playRebirth(reborn);
       render();
       await delay(300);
       await enemyPhase();
@@ -747,7 +747,7 @@ export function runBattle({ root, combat, monster, world, sfx, heroFirst, featur
    *   3. 心跳声一下比一下近，钟声与低鸣涌上来，暗王慢慢重新站起，王冠从此歪着；第二段音乐从无声开始由弱渐强。
    *   4. 标题「王冠倾斜」，战斗卡回来，新形状的心阵从下往上重新聚拢。
    */
-  async function playRebirth(event, breather = null) {
+  async function playRebirth(event) {
     const king = monsterEntity();
     modal.classList.remove("dread");
     await delay(450);
@@ -771,11 +771,6 @@ export function runBattle({ root, combat, monster, world, sfx, heroFirst, featur
     await delay(380);
     await assembleEnemy(combat.monsterMatrix, { fromBottom: true });
     modal.classList.remove("rebirth");
-    if (breather?.changes.length) {
-      sfx.play("heal");
-      floatText("hero", `喘息 +${breather.changes.length}`, "heal");
-      await heroView.animate(breather.changes, "heal", combat.heroMatrix);
-    }
   }
 
   /**
