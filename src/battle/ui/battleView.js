@@ -476,7 +476,10 @@ export function runBattle({ root, combat, monster, world, sfx, heroFirst, featur
     banner.textContent = heroTurn ? (mode === "heal" ? "选择治疗位置" : combat.bonus ? (combat.bonusReason === "chase" ? "追击" : "追加攻击") : "己方回合") : "敌方回合";
     banner.classList.toggle("enemy-turn", !heroTurn);
     modal.classList.toggle("heal-mode", mode === "heal");
-    $("[data-heal-bar]").hidden = mode !== "heal";
+    const healBar = $("[data-heal-bar]");
+    healBar.hidden = mode !== "heal";
+    // 电脑上盖住受击预告那一行（见 battle.css「喝药水」）。
+    if (mode === "heal") healBar.style.top = `${$("[data-aim-note]").offsetTop}px`;
     modal.classList.toggle("locked", !heroTurn);
     renderWeapons();
     renderActions();
