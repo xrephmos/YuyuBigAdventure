@@ -445,6 +445,19 @@ test("强化：延长可切换为加长形状；候选项不会重复已有的�
   assert.equal(weaponShape("hook", {}, { ext: true }).size, 3, "没有延长强化时切换无效");
 });
 
+test("斜刃、月镰天生能左右翻转，铁砧不再刷出它们的镜像", () => {
+  const combat = createCombat({
+    hero: { matrix: filledMatrix(4, 4), weapons: ["slash", "scythe"], potions: 0, upgrades: {} },
+    monster: { def: MONSTERS.ink, matrix: filledMatrix(4, 4) },
+    rng: createRng(2),
+  });
+  assert.deepEqual(hitSet(previewAttack(combat, "slash", 0, 1)), ["0,1", "1,2"], "原形状向右下斜");
+  assert.equal(heroTransform(combat, "slash", "mirror").ok, true, "不需要强化就能翻转");
+  assert.deepEqual(hitSet(previewAttack(combat, "slash", 0, 1)), ["0,1", "1,0"], "翻转后向左下斜");
+  assert.equal(heroTransform(combat, "scythe", "mirror").ok, true);
+  for (const id of ["slash", "scythe"]) assert.equal(upgradeAllowed(id, "mirror"), false);
+});
+
 test("延长：战斗中不占回合地切换长短，可以随时切回原形状", () => {
   const combat = createCombat({
     hero: { matrix: filledMatrix(4, 4), weapons: ["spear"], potions: 0, upgrades: { spear: { extend: true } } },

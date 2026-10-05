@@ -28,9 +28,11 @@ export const WEAPONS = {
     name: "斜刃",
     art: ["@.", ".#"],
     plus: ["@..", ".#.", "..#"],
-    transforms: ["mirror"],
+    transforms: [],
+    // 斜线武器天生就能左右翻转：只有一个斜向，在空心的心阵上很难找到落点。
+    innate: ["mirror"],
     cooldown: 0,
-    desc: "斜向攻击两格。",
+    desc: "斜向攻击两格，可以左右翻转。",
   },
   hook: {
     id: "hook",
@@ -70,9 +72,10 @@ export const WEAPONS = {
     name: "月镰",
     art: ["#..", ".@.", "..#"],
     plus: ["#...", ".@..", "..#.", "...#"],
-    transforms: ["mirror"],
+    transforms: [],
+    innate: ["mirror"],
     cooldown: 1,
-    desc: "斜向攻击三格。",
+    desc: "斜向攻击三格，可以左右翻转。",
   },
   awl: {
     id: "awl",

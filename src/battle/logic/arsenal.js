@@ -64,6 +64,14 @@ export function skillShape(id) {
   return SKILLS[id].shape;
 }
 
+/** 战斗中实际生效的强化：在锻造得来的强化之上，补上武器天生就有的变形（斜刃、月镰天生能镜像）。 */
+export function withInnate(upgrades = {}) {
+  const result = { ...upgrades };
+  for (const w of Object.values(WEAPONS))
+    if (w.innate?.length) result[w.id] = { ...result[w.id], ...Object.fromEntries(w.innate.map((k) => [k, true])) };
+  return result;
+}
+
 /** 该武器所有“看起来不同”的旋转角度（与平移无关），例如短剑只有横、竖两种。 */
 export function distinctRotations(id, upgrades = {}, orient = {}) {
   const rots = [];

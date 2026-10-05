@@ -16,7 +16,7 @@ import { WEAPONS, SHIELD, POTION } from "../data/weapons.js";
 import { SKILLS } from "../data/skills.js";
 import { getHeroName } from "../data/heroName.js";
 import { ALL_FEATURES } from "../data/features.js";
-import { weaponShape, nextRotation, toggleExtent, weaponCooldown, isLineShape } from "./arsenal.js";
+import { weaponShape, nextRotation, toggleExtent, weaponCooldown, isLineShape, withInnate } from "./arsenal.js";
 
 /**
  * 充能：中型、重型武器每用一次要消耗充能，充能靠连击攒。
@@ -93,7 +93,7 @@ export function createCombat({
     lastFootprint: null,
     // 上一击用的招式：连续两次用同一件武器（或同一个技能）不算连上。
     lastWeaponId: null,
-    upgrades: hero.upgrades ?? {},
+    upgrades: withInnate(hero.upgrades ?? {}),
     // 追加攻击：bonus 为 true 时怪物暂不行动，主角再出一招。bonusReason：chase 追击 / swift 突刺。
     bonus: false,
     bonusReason: null,
