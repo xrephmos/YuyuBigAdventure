@@ -697,14 +697,26 @@ export class BoardWorld {
     this.updateGloom(0);
   }
 
-  /** 按主角离首领的远近更新压暗程度：只在 level.gloom 的章节，起点为 0，走到首领跟前为 1。 */
-  updateGloom(duration = 700) {
+  /** 主角站在第 r 行时的压暗程度：只在 level.gloom 的章节，起点为 0，走到首领跟前为 1；其他章节恒为 0。 */
+  gloomAt(r) {
     const board = this.board;
     const boss = board?.level.gloom && board.monsters.find((m) => m.def.boss);
-    if (!boss) return this.setGloom(0, duration);
+    if (!boss) return 0;
     const span = Math.max(1, this.gloomFrom - boss.r - 1);
-    const t = Math.min(1, Math.max(0, (this.gloomFrom - board.hero.r) / span));
-    return this.setGloom(t, duration);
+    return Math.min(1, Math.max(0, (this.gloomFrom - r) / span));
+  }
+
+  /** 按主角离首领的远近更新压暗程度。 */
+  updateGloom(duration = 700) {
+    return this.setGloom(this.gloomAt(this.board?.hero.r ?? 0), duration);
+  }
+
+  /**
+   * 主角走一步要多久（毫秒）。越往暗处走步子越沉：时长从 260 拉长到约 620，见 moveHero。
+   * 音效那边用它把落地的闷响对准落地的一刻。
+   */
+  heroStepTime(r) {
+    return 260 * (1 + 1.4 * this.gloomAt(r)) + 120;
   }
 
   updateMonster(m) {
@@ -815,25 +827,30 @@ export class BoardWorld {
     return this.tween(160, (t) => (object.rotation.y = start + delta * t));
   }
 
-  async hop(object, to, height = 0.35, duration = 260) {
+  /** 跳到相邻的格子。weight 0～1：越大越沉，起跳更低、在空中更慢、落地压得更扁、回弹更久。 */
+  async hop(object, to, height = 0.35, duration = 260, weight = 0) {
     const from = object.position.clone();
     this.faceToward(object, to);
+    // 沉重的步子先慢后快地砸下去，而不是匀速飘过去。
+    const ease = weight ? (t) => t ** (1 + 0.6 * weight) : (t) => t;
     await this.tween(duration, (t) => {
-      object.position.lerpVectors(from, to, t);
+      object.position.lerpVectors(from, to, ease(t));
       object.position.y = to.y + Math.sin(Math.PI * t) * height;
     });
     const body = object.userData.body;
     if (body)
-      await this.tween(120, (t) => {
-        const s = Math.sin(Math.PI * t) * 0.12;
+      await this.tween(120 + 160 * weight, (t) => {
+        const s = Math.sin(Math.PI * t) * (0.12 + 0.1 * weight);
         body.scale.set(1 + s, 1 - s, 1 + s);
       });
   }
 
+  /** 主角走一步。终章越靠近暗王步子越沉（见 heroStepTime），镜头也跟得更慢。 */
   moveHero(to) {
-    this.follow(to.r);
-    this.updateGloom();
-    return this.hop(this.hero, tileCenter(to.r, to.c));
+    const weight = this.gloomAt(to.r);
+    this.follow(to.r, 450 * (1 + weight));
+    this.updateGloom(700 * (1 + weight));
+    return this.hop(this.hero, tileCenter(to.r, to.c), 0.35 * (1 - 0.5 * weight), 260 * (1 + 1.4 * weight), weight);
   }
 
   bump(dir) {

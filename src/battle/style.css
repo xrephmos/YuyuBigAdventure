@@ -5587,13 +5587,14 @@ body.dev-mode .dev-badge {
   --head-gap: var(--sp-4);
 }
 
+/* 底色跟着面板走：结局（蓝底）、失败（黑底）的按钮栏不能是一块白板。 */
 .screen .panel > .panel-actions:last-child {
   position: sticky;
   bottom: 0;
   z-index: 3;
   padding-top: var(--sp-4);
   padding-bottom: var(--pad-y);
-  background: var(--paper);
+  background: inherit;
 }
 
 

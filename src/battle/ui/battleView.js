@@ -8,7 +8,7 @@ import { patternListHtml } from "./monsterIntel.js";
 import { getHeroName } from "../data/heroName.js";
 import { ALL_FEATURES } from "../data/features.js";
 import { battleLayout, isTouch } from "./device.js";
-import { countHearts, reach, footprint, applyChanges, EMPTY } from "../logic/shapes.js";
+import { countHearts, reach, footprint, applyChanges, EMPTY, VOID } from "../logic/shapes.js";
 import {
   heroAttack,
   heroHeal,
@@ -216,7 +216,8 @@ export function runBattle({ root, combat, monster, world, sfx, heroFirst, featur
     } else enemyView.fixedSize = heroView.fixedSize = Math.min(enemySize, heroSize);
   };
   syncSize();
-  enemyView.set(combat.monsterMatrix);
+  // 首领开场要演一遍心阵聚拢（playBossIntro）：先留空，不然窗口一打开就看到满满的心阵，随后又被清空重来一遍。
+  enemyView.set(def.boss ? combat.monsterMatrix.map((row) => row.map(() => VOID)) : combat.monsterMatrix);
   heroView.set(combat.heroMatrix);
 
   const heroEntity = () => world.hero;

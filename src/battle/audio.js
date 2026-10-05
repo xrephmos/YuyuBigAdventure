@@ -235,7 +235,7 @@ export class Sfx {
 
   // ——— 音效 ———
 
-  play(event, amount = 1) {
+  play(event, amount = 1, delay = 0) {
     this.unlock();
     if (!this.enabled || !this.context) return;
     const j = jitter();
@@ -245,6 +245,15 @@ export class Sfx {
         this.tone(320 * j, 0.06, { type: "triangle", volume: 0.035, slide: -120 });
         this.noise(0.04, { volume: 0.025, filter: 2400, type: "bandpass", q: 2 });
         break;
+      case "tread": {
+        // 终章沉重的步子：起步时木头声更低更闷，落地（delay 秒后）再一声低沉的闷响，amount 0～1 越大越重。
+        const w = Math.min(1, Math.max(0, amount));
+        this.tone(320 * (1 - 0.35 * w) * j, 0.07, { type: "triangle", volume: 0.035, slide: -140 });
+        this.noise(0.05, { volume: 0.02, filter: 2400 * (1 - 0.5 * w), type: "bandpass", q: 2 });
+        this.tone(70 * j, 0.22 + 0.2 * w, { delay, type: "sine", volume: 0.05 + 0.07 * w, slide: -30 });
+        this.noise(0.12 + 0.1 * w, { delay, volume: 0.02 + 0.03 * w, filter: 380 });
+        break;
+      }
       case "bump":
         this.tone(95 * j, 0.18, { type: "sine", volume: 0.08, slide: -40 });
         this.noise(0.08, { volume: 0.03, filter: 500 });

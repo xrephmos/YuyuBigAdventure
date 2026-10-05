@@ -816,8 +816,12 @@ async function step(r, c) {
       await battle(result.monster, true);
       return board.over ? "over" : "battle";
     }
-    sfx.play("step");
-    await world.moveHero(result.events[0].to);
+    const to = result.events[0].to;
+    // 终章越往里步子越沉：落地时多一声闷响，对准落地的那一刻。
+    const weight = world.gloomAt(to.r);
+    if (weight > 0) sfx.play("tread", weight, world.heroStepTime(to.r) / 1000 - 0.12);
+    else sfx.play("step");
+    await world.moveHero(to);
     if (gen !== levelGen) return "over";
     world.updateFog(board);
     for (const event of result.events.slice(1)) {
