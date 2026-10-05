@@ -1002,6 +1002,22 @@ test("怪物心阵按章节分档成长：前期够连上几下，后期越来�
   assert.ok(variantsAt(MONSTERS.rook, 2).map(key).includes(key(rook.matrix)), "棋盘按本章的档位、从这一档的变体里取一套");
 });
 
+test("护甲心嵌在心阵内部：每颗至少有三个上下左右的邻居，不会被留成一颗孤零零的心", () => {
+  const matrices = Object.values(MONSTERS).flatMap((def) => [
+    ...Object.keys(def.ranks).flatMap((rank) => variantsAt(def, Number(rank)).map((m, v) => [`${def.name} 第 ${rank} 档第 ${v + 1} 套`, m])),
+    ...(def.rebirth ? [[`${def.name}二阶段`, def.rebirth.matrixValues]] : []),
+  ]);
+  const near = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+  for (const [name, m] of matrices)
+    m.forEach((row, r) =>
+      row.forEach((v, c) => {
+        if (v < 2) return;
+        const n = near.filter(([dr, dc]) => (m[r + dr]?.[c + dc] ?? -1) > 0).length;
+        assert.ok(n >= 3, `${name} 的护甲心 (${r},${c}) 只有 ${n} 个邻居`);
+      }),
+    );
+});
+
 test("心阵变体：普通怪物每一档至少 3 套，左右对称或中心对称，同一档大小相近；遭遇时随机取一套", () => {
   for (const def of Object.values(MONSTERS)) {
     // 墨渍怪是序章的教学怪物，暗王是首领：特殊怪物只有一套、可以不对称。
